@@ -8,7 +8,7 @@ import torch
 from torch.utils.data import Dataset
 import torchaudio
 
-from src.data.preprocess import preprocess_waveform
+from src.data.preprocess import load_waveform, preprocess_waveform
 
 Split = Literal["training", "validation", "testing"]
 
@@ -42,6 +42,12 @@ class SpeechCommandsRobotDataset(Dataset):
     def _label_for_index(self, index: int) -> str:
         return Path(self.base._walker[index]).parent.name
 
+    def _path_for_index(self, index: int) -> Path:
+        path = Path(self.base._walker[index])
+        if path.is_absolute():
+            return path
+        return Path.cwd() / path
+
     def _build_balanced_index(self, unknown_ratio: float, seed: int) -> list[tuple[int, str]]:
         known_by_label = {label: [] for label in self.commands}
         unknown_indices: list[int] = []
@@ -74,7 +80,7 @@ class SpeechCommandsRobotDataset(Dataset):
 
     def __getitem__(self, index: int) -> tuple[torch.Tensor, int]:
         base_index, label = self.samples[index]
-        waveform, sample_rate, *_ = self.base[base_index]
+        waveform, sample_rate = load_waveform(str(self._path_for_index(base_index)))
         waveform = preprocess_waveform(
             waveform,
             sample_rate=sample_rate,
