@@ -84,20 +84,24 @@ class SpeechCommandsRobotDataset(Dataset):
         return waveform, self.class_to_idx[label]
 
 
-def create_datasets(config: dict) -> tuple[SpeechCommandsRobotDataset, SpeechCommandsRobotDataset, SpeechCommandsRobotDataset]:
+def create_dataset(config: dict, split: Split) -> SpeechCommandsRobotDataset:
     data_cfg = config["data"]
-    common_kwargs = {
-        "root": data_cfg["root"],
-        "commands": data_cfg["commands"],
-        "unknown_label": data_cfg["unknown_label"],
-        "unknown_ratio": data_cfg["unknown_ratio"],
-        "download": data_cfg["download"],
-        "sample_rate": data_cfg["sample_rate"],
-        "duration_seconds": data_cfg["duration_seconds"],
-        "seed": config["seed"],
-    }
+    return SpeechCommandsRobotDataset(
+        root=data_cfg["root"],
+        split=split,
+        commands=data_cfg["commands"],
+        unknown_label=data_cfg["unknown_label"],
+        unknown_ratio=data_cfg["unknown_ratio"],
+        download=data_cfg["download"],
+        sample_rate=data_cfg["sample_rate"],
+        duration_seconds=data_cfg["duration_seconds"],
+        seed=config["seed"],
+    )
+
+
+def create_datasets(config: dict) -> tuple[SpeechCommandsRobotDataset, SpeechCommandsRobotDataset, SpeechCommandsRobotDataset]:
     return (
-        SpeechCommandsRobotDataset(split="training", **common_kwargs),
-        SpeechCommandsRobotDataset(split="validation", **common_kwargs),
-        SpeechCommandsRobotDataset(split="testing", **common_kwargs),
+        create_dataset(config, "training"),
+        create_dataset(config, "validation"),
+        create_dataset(config, "testing"),
     )
