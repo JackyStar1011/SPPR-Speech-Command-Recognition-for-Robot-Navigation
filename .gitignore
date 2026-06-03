@@ -228,3 +228,4 @@ outputs/figures/*
 !outputs/figures/.gitkeep
 outputs/metrics/*
 !outputs/metrics/.gitkeep
+data/test_myVoice

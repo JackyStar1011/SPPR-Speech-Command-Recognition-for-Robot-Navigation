@@ -65,7 +65,7 @@ def load_audio_file(
 def load_waveform(path: str) -> tuple[torch.Tensor, int]:
     try:
         return torchaudio.load(path)
-    except RuntimeError as error:
+    except (ImportError, RuntimeError, OSError) as error:
         try:
             return _load_pcm_wav(path)
         except Exception:

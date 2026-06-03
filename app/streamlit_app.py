@@ -1,13 +1,17 @@
 from __future__ import annotations
 
 from pathlib import Path
+import sys
 import tempfile
 
 import matplotlib.pyplot as plt
 import streamlit as st
-import torchaudio
 
-from src.data.preprocess import preprocess_waveform
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from src.data.preprocess import load_waveform, preprocess_waveform
 from src.features.logmel import build_logmel_extractor
 from src.inference.predictor import SpeechCommandPredictor
 from src.utils.config import load_config
@@ -60,7 +64,7 @@ def main() -> None:
         temp_file.write(uploaded_file.getbuffer())
         temp_path = Path(temp_file.name)
 
-    waveform, sample_rate = torchaudio.load(str(temp_path))
+    waveform, sample_rate = load_waveform(str(temp_path))
     data_cfg = config["data"]
     waveform = preprocess_waveform(
         waveform,
