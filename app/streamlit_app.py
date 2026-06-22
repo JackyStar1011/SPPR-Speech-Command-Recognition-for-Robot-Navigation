@@ -1,18 +1,17 @@
 from __future__ import annotations
 
-import hashlib
 from pathlib import Path
 import sys
-import tempfile
 
 import matplotlib.pyplot as plt
+import sounddevice as sd
 import streamlit as st
+import torch
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.data.preprocess import load_waveform, preprocess_waveform
 from src.features.logmel import build_logmel_extractor
 from src.inference.predictor import SpeechCommandPredictor
 from src.robot.simulator import RobotSimulator
@@ -30,9 +29,15 @@ def get_robot_simulator() -> RobotSimulator:
     return st.session_state.robot_simulator
 
 
-def make_upload_key(uploaded_file, audio_bytes: bytes) -> str:
-    digest = hashlib.sha256(audio_bytes).hexdigest()
-    return f"{uploaded_file.name}:{len(audio_bytes)}:{digest}"
+def record_microphone(sample_rate: int, seconds: float) -> torch.Tensor:
+    audio = sd.rec(
+        int(seconds * sample_rate),
+        samplerate=sample_rate,
+        channels=1,
+        dtype="float32",
+    )
+    sd.wait()
+    return torch.from_numpy(audio.T.copy())
 
 
 def plot_waveform(waveform, sample_rate: int):
@@ -67,54 +72,45 @@ def main() -> None:
         config = load_config(config_path)
         checkpoint_path = st.text_input("Checkpoint", value=config["training"]["checkpoint_path"])
         threshold = st.slider("Confidence threshold", 0.0, 1.0, 0.70, 0.01)
+        record_seconds = st.number_input("Record seconds", min_value=0.25, max_value=3.0, value=1.0, step=0.25)
         device = st.selectbox("Device", ["auto", "cpu", "cuda"], index=0)
         reset_clicked = st.button("Reset simulator")
 
     simulator = get_robot_simulator()
-    uploaded_file = st.file_uploader("Upload WAV file", type=["wav"])
-    audio_bytes = uploaded_file.getvalue() if uploaded_file is not None else None
-    upload_key = make_upload_key(uploaded_file, audio_bytes) if uploaded_file is not None and audio_bytes is not None else None
+    record_clicked = st.button("Record command", type="primary")
 
     if reset_clicked:
         simulator.reset()
-        if upload_key is not None:
-            st.session_state.last_robot_audio_key = upload_key
 
     result = None
     applied_event = None
-    temp_path = None
     waveform = None
     logmel = None
     data_cfg = config["data"]
 
-    if uploaded_file is not None and audio_bytes is not None:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_file:
-            temp_file.write(audio_bytes)
-            temp_path = Path(temp_file.name)
-
-        waveform, sample_rate = load_waveform(str(temp_path))
-        waveform = preprocess_waveform(
-            waveform,
-            sample_rate=sample_rate,
-            target_sample_rate=data_cfg["sample_rate"],
-            target_num_samples=int(data_cfg["sample_rate"] * data_cfg["duration_seconds"]),
-        )
-        feature_extractor = build_logmel_extractor(config)
-        logmel = feature_extractor(waveform)
-
+    if record_clicked:
         if Path(checkpoint_path).exists():
-            predictor = load_predictor(checkpoint_path, config_path, device)
-            result = predictor.predict_file(temp_path, threshold=threshold)
-            if upload_key != st.session_state.get("last_robot_audio_key"):
+            sample_rate = data_cfg["sample_rate"]
+            try:
+                with st.spinner("Recording..."):
+                    waveform = record_microphone(sample_rate, float(record_seconds))
+                feature_extractor = build_logmel_extractor(config)
+                logmel = feature_extractor(waveform)
+
+                predictor = load_predictor(checkpoint_path, config_path, device)
+                result = predictor.predict_waveform(
+                    waveform,
+                    sample_rate=sample_rate,
+                    threshold=threshold,
+                )
                 applied_event = simulator.apply_command(
                     str(result["label"]),
                     confidence=float(result["confidence"]),
                 )
-                st.session_state.last_robot_audio_key = upload_key
+            except Exception as error:
+                st.error(f"Microphone recording failed: {error}")
         else:
             st.warning(f"Checkpoint not found: {checkpoint_path}")
-
-        temp_path.unlink(missing_ok=True)
 
     map_col, state_col = st.columns([1.35, 1.0])
     with map_col:
