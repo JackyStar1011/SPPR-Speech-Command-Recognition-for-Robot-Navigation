@@ -229,3 +229,7 @@ outputs/figures/*
 outputs/metrics/*
 !outputs/metrics/.gitkeep
 data/test_myVoice
+
+# Local report drafts and helper scripts
+reports/
+scripts/
