@@ -1,18 +1,20 @@
 from __future__ import annotations
 
-import hashlib
+import base64
+import html
+from io import BytesIO
 from pathlib import Path
 import sys
-import tempfile
 
 import matplotlib.pyplot as plt
+import sounddevice as sd
 import streamlit as st
+import torch
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.data.preprocess import load_waveform, preprocess_waveform
 from src.features.logmel import build_logmel_extractor
 from src.inference.predictor import SpeechCommandPredictor
 from src.robot.simulator import RobotSimulator
@@ -30,9 +32,21 @@ def get_robot_simulator() -> RobotSimulator:
     return st.session_state.robot_simulator
 
 
-def make_upload_key(uploaded_file, audio_bytes: bytes) -> str:
-    digest = hashlib.sha256(audio_bytes).hexdigest()
-    return f"{uploaded_file.name}:{len(audio_bytes)}:{digest}"
+def get_prediction_results() -> list[dict[str, object]]:
+    if "prediction_results" not in st.session_state:
+        st.session_state.prediction_results = []
+    return st.session_state.prediction_results
+
+
+def record_microphone(sample_rate: int, seconds: float) -> torch.Tensor:
+    audio = sd.rec(
+        int(seconds * sample_rate),
+        samplerate=sample_rate,
+        channels=1,
+        dtype="float32",
+    )
+    sd.wait()
+    return torch.from_numpy(audio.T.copy())
 
 
 def plot_waveform(waveform, sample_rate: int):
@@ -58,6 +72,69 @@ def plot_logmel(logmel):
     return fig
 
 
+def figure_to_data_uri(fig) -> str:
+    buffer = BytesIO()
+    fig.savefig(buffer, format="png", dpi=120, bbox_inches="tight")
+    plt.close(fig)
+    encoded = base64.b64encode(buffer.getvalue()).decode("ascii")
+    return f"data:image/png;base64,{encoded}"
+
+
+def build_export_html(rows: list[dict[str, object]]) -> str:
+    table_rows = []
+    for row in rows:
+        table_rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(row['Step']))}</td>"
+            f"<td>{html.escape(str(row['Command']))}</td>"
+            f"<td>{html.escape(str(row['Raw command']))}</td>"
+            f"<td>{html.escape(str(row['Confidence']))}</td>"
+            f"<td>{html.escape(str(row['Action']))}</td>"
+            f"<td>{html.escape(str(row['Position']))}</td>"
+            f"<td>{html.escape(str(row['Direction']))}</td>"
+            f"<td><img src=\"{row['Waveform']}\" alt=\"Waveform\"/></td>"
+            f"<td><img src=\"{row['Log-Mel']}\" alt=\"Log-Mel spectrogram\"/></td>"
+            "</tr>"
+        )
+
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <title>Speech Command Results</title>
+  <style>
+    body {{ font-family: Arial, sans-serif; margin: 24px; color: #111827; }}
+    table {{ border-collapse: collapse; width: 100%; }}
+    th, td {{ border: 1px solid #d1d5db; padding: 8px; vertical-align: top; }}
+    th {{ background: #f3f4f6; text-align: left; }}
+    img {{ width: 280px; max-width: 100%; }}
+  </style>
+</head>
+<body>
+  <h1>Speech Command Results</h1>
+  <table>
+    <thead>
+      <tr>
+        <th>Step</th>
+        <th>Command</th>
+        <th>Raw command</th>
+        <th>Confidence</th>
+        <th>Action</th>
+        <th>Position</th>
+        <th>Direction</th>
+        <th>Waveform</th>
+        <th>Log-Mel</th>
+      </tr>
+    </thead>
+    <tbody>
+      {''.join(table_rows)}
+    </tbody>
+  </table>
+</body>
+</html>
+"""
+
+
 def main() -> None:
     st.set_page_config(page_title="Speech Command Robot Demo", layout="wide")
     st.title("Speech Command Robot Demo")
@@ -67,54 +144,62 @@ def main() -> None:
         config = load_config(config_path)
         checkpoint_path = st.text_input("Checkpoint", value=config["training"]["checkpoint_path"])
         threshold = st.slider("Confidence threshold", 0.0, 1.0, 0.70, 0.01)
+        record_seconds = st.number_input("Record seconds", min_value=0.25, max_value=3.0, value=1.0, step=0.25)
         device = st.selectbox("Device", ["auto", "cpu", "cuda"], index=0)
         reset_clicked = st.button("Reset simulator")
 
     simulator = get_robot_simulator()
-    uploaded_file = st.file_uploader("Upload WAV file", type=["wav"])
-    audio_bytes = uploaded_file.getvalue() if uploaded_file is not None else None
-    upload_key = make_upload_key(uploaded_file, audio_bytes) if uploaded_file is not None and audio_bytes is not None else None
+    prediction_results = get_prediction_results()
+    record_clicked = st.button("Record command", type="primary")
 
     if reset_clicked:
         simulator.reset()
-        if upload_key is not None:
-            st.session_state.last_robot_audio_key = upload_key
+        prediction_results.clear()
 
     result = None
     applied_event = None
-    temp_path = None
     waveform = None
     logmel = None
     data_cfg = config["data"]
 
-    if uploaded_file is not None and audio_bytes is not None:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_file:
-            temp_file.write(audio_bytes)
-            temp_path = Path(temp_file.name)
-
-        waveform, sample_rate = load_waveform(str(temp_path))
-        waveform = preprocess_waveform(
-            waveform,
-            sample_rate=sample_rate,
-            target_sample_rate=data_cfg["sample_rate"],
-            target_num_samples=int(data_cfg["sample_rate"] * data_cfg["duration_seconds"]),
-        )
-        feature_extractor = build_logmel_extractor(config)
-        logmel = feature_extractor(waveform)
-
+    if record_clicked:
         if Path(checkpoint_path).exists():
-            predictor = load_predictor(checkpoint_path, config_path, device)
-            result = predictor.predict_file(temp_path, threshold=threshold)
-            if upload_key != st.session_state.get("last_robot_audio_key"):
+            sample_rate = data_cfg["sample_rate"]
+            try:
+                with st.spinner("Recording..."):
+                    waveform = record_microphone(sample_rate, float(record_seconds))
+                feature_extractor = build_logmel_extractor(config)
+                logmel = feature_extractor(waveform)
+
+                predictor = load_predictor(checkpoint_path, config_path, device)
+                result = predictor.predict_waveform(
+                    waveform,
+                    sample_rate=sample_rate,
+                    threshold=threshold,
+                )
                 applied_event = simulator.apply_command(
                     str(result["label"]),
                     confidence=float(result["confidence"]),
                 )
-                st.session_state.last_robot_audio_key = upload_key
+                waveform_image = figure_to_data_uri(plot_waveform(waveform, sample_rate))
+                logmel_image = figure_to_data_uri(plot_logmel(logmel))
+                prediction_results.append(
+                    {
+                        "Step": applied_event["step"],
+                        "Command": result["label"],
+                        "Raw command": result["raw_label"],
+                        "Confidence": f"{float(result['confidence']):.2%}",
+                        "Action": result["action"],
+                        "Position": str(applied_event["position"]),
+                        "Direction": applied_event["direction"],
+                        "Waveform": waveform_image,
+                        "Log-Mel": logmel_image,
+                    }
+                )
+            except Exception as error:
+                st.error(f"Microphone recording failed: {error}")
         else:
             st.warning(f"Checkpoint not found: {checkpoint_path}")
-
-        temp_path.unlink(missing_ok=True)
 
     map_col, state_col = st.columns([1.35, 1.0])
     with map_col:
@@ -144,6 +229,24 @@ def main() -> None:
             st.pyplot(plot_waveform(waveform, data_cfg["sample_rate"]), clear_figure=True)
         with right_col:
             st.pyplot(plot_logmel(logmel), clear_figure=True)
+
+    if prediction_results:
+        st.subheader("Export results")
+        st.dataframe(
+            prediction_results,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "Waveform": st.column_config.ImageColumn("Waveform"),
+                "Log-Mel": st.column_config.ImageColumn("Log-Mel"),
+            },
+        )
+        st.download_button(
+            "Download HTML report",
+            data=build_export_html(prediction_results),
+            file_name="speech_command_results.html",
+            mime="text/html",
+        )
 
 
 if __name__ == "__main__":

@@ -110,7 +110,7 @@ This records from the default microphone using `sounddevice`, then runs the same
 streamlit run app/streamlit_app.py
 ```
 
-The app lets you upload a WAV file, inspect its waveform and Log-Mel spectrogram, and view the predicted command, confidence, and robot action.
+The app records a short command from the laptop microphone, shows the waveform and Log-Mel spectrogram, and applies the predicted command to the robot simulator.
 
 ## Project Structure
 
@@ -126,7 +126,7 @@ src/inference/infer_wav.py     WAV file inference CLI
 src/inference/infer_mic.py     Microphone inference CLI
 src/inference/predictor.py     Shared checkpoint loading and prediction logic
 src/robot/actions.py           Command-to-action mapping
-app/streamlit_app.py           Upload-based demo UI
+app/streamlit_app.py           Microphone-based demo UI
 ```
 
 Generated data, checkpoints, figures, and metrics are ignored by Git except for `.gitkeep` placeholders.
