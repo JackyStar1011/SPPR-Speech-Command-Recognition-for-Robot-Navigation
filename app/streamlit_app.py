@@ -11,7 +11,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.data.preprocess import load_waveform, preprocess_waveform
+from src.data.preprocess import get_speech_alignment_config, load_waveform, preprocess_waveform
 from src.features.logmel import build_logmel_extractor
 from src.inference.predictor import SpeechCommandPredictor
 from src.utils.config import load_config
@@ -50,10 +50,11 @@ def main() -> None:
     st.title("Speech Command Robot Demo")
 
     with st.sidebar:
-        config_path = st.text_input("Config", value="configs/baseline.yaml")
+        config_path = st.text_input("Config", value="configs/cnn_gru.yaml")
         config = load_config(config_path)
         checkpoint_path = st.text_input("Checkpoint", value=config["training"]["checkpoint_path"])
-        threshold = st.slider("Confidence threshold", 0.0, 1.0, 0.70, 0.01)
+        default_threshold = float(config.get("inference", {}).get("threshold", 0.70))
+        threshold = st.slider("Confidence threshold", 0.0, 1.0, default_threshold, 0.01)
         device = st.selectbox("Device", ["auto", "cpu", "cuda"], index=0)
 
     uploaded_file = st.file_uploader("Upload WAV file", type=["wav"])
@@ -66,11 +67,14 @@ def main() -> None:
 
     waveform, sample_rate = load_waveform(str(temp_path))
     data_cfg = config["data"]
+    align_speech, speech_alignment = get_speech_alignment_config(config, inference=True)
     waveform = preprocess_waveform(
         waveform,
         sample_rate=sample_rate,
         target_sample_rate=data_cfg["sample_rate"],
         target_num_samples=int(data_cfg["sample_rate"] * data_cfg["duration_seconds"]),
+        align_speech=align_speech,
+        speech_alignment=speech_alignment,
     )
     feature_extractor = build_logmel_extractor(config)
     logmel = feature_extractor(waveform)

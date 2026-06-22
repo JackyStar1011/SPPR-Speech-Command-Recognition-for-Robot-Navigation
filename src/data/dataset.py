@@ -8,7 +8,7 @@ import torch
 from torch.utils.data import Dataset
 import torchaudio
 
-from src.data.preprocess import load_waveform, preprocess_waveform
+from src.data.preprocess import get_speech_alignment_config, load_waveform, preprocess_waveform
 
 Split = Literal["training", "validation", "testing"]
 
@@ -25,6 +25,8 @@ class SpeechCommandsRobotDataset(Dataset):
         sample_rate: int = 16000,
         duration_seconds: float = 1.0,
         seed: int = 42,
+        align_speech: bool = False,
+        speech_alignment: dict | None = None,
     ) -> None:
         self.base = torchaudio.datasets.SPEECHCOMMANDS(
             root=root,
@@ -37,6 +39,8 @@ class SpeechCommandsRobotDataset(Dataset):
         self.class_to_idx = {label: index for index, label in enumerate(self.classes)}
         self.sample_rate = sample_rate
         self.num_samples = int(sample_rate * duration_seconds)
+        self.align_speech = align_speech
+        self.speech_alignment = speech_alignment or {}
         self.samples = self._build_balanced_index(unknown_ratio, seed)
 
     def _label_for_index(self, index: int) -> str:
@@ -86,12 +90,15 @@ class SpeechCommandsRobotDataset(Dataset):
             sample_rate=sample_rate,
             target_sample_rate=self.sample_rate,
             target_num_samples=self.num_samples,
+            align_speech=self.align_speech,
+            speech_alignment=self.speech_alignment,
         )
         return waveform, self.class_to_idx[label]
 
 
 def create_dataset(config: dict, split: Split) -> SpeechCommandsRobotDataset:
     data_cfg = config["data"]
+    align_speech, speech_alignment = get_speech_alignment_config(config)
     return SpeechCommandsRobotDataset(
         root=data_cfg["root"],
         split=split,
@@ -102,6 +109,8 @@ def create_dataset(config: dict, split: Split) -> SpeechCommandsRobotDataset:
         sample_rate=data_cfg["sample_rate"],
         duration_seconds=data_cfg["duration_seconds"],
         seed=config["seed"],
+        align_speech=align_speech,
+        speech_alignment=speech_alignment,
     )
 
 

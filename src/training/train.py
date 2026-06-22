@@ -10,9 +10,10 @@ from tqdm import tqdm
 
 from src.data.dataset import create_datasets
 from src.features.logmel import build_logmel_extractor
-from src.models.cnn import build_model
+from src.models.cnn_gru import build_model
 from src.training.evaluate import evaluate_checkpoint, evaluate_model
 from src.utils.config import load_config
+from src.utils.metrics import compute_classification_metrics
 from src.utils.seed import resolve_device, set_seed
 
 
@@ -24,6 +25,7 @@ def train_one_epoch(
     optimizer: torch.optim.Optimizer,
     device: torch.device,
     epoch: int,
+    gradient_clip_norm: float | None = None,
 ) -> tuple[float, float]:
     model.train()
     feature_extractor.eval()
@@ -41,6 +43,8 @@ def train_one_epoch(
         logits = model(features)
         loss = criterion(logits, labels)
         loss.backward()
+        if gradient_clip_norm is not None:
+            nn.utils.clip_grad_norm_(model.parameters(), gradient_clip_norm)
         optimizer.step()
 
         predictions = logits.argmax(dim=1)
@@ -71,6 +75,7 @@ def save_checkpoint(
     epoch: int,
     val_loss: float,
     val_accuracy: float,
+    val_macro_f1: float,
 ) -> None:
     checkpoint_path = Path(path)
     checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
@@ -83,14 +88,15 @@ def save_checkpoint(
             "epoch": epoch,
             "val_loss": val_loss,
             "val_accuracy": val_accuracy,
+            "val_macro_f1": val_macro_f1,
         },
         checkpoint_path,
     )
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Train the baseline Speech Command CNN.")
-    parser.add_argument("--config", default="configs/baseline.yaml")
+    parser = argparse.ArgumentParser(description="Train the Speech Command CNN-GRU.")
+    parser.add_argument("--config", default="configs/cnn_gru.yaml")
     return parser.parse_args()
 
 
@@ -107,9 +113,17 @@ def main() -> None:
     model = build_model(config, num_classes=len(train_dataset.classes)).to(device)
     feature_extractor = build_logmel_extractor(config).to(device)
     criterion = nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=config["training"]["learning_rate"])
+    train_cfg = config["training"]
+    optimizer = torch.optim.AdamW(
+        model.parameters(),
+        lr=train_cfg["learning_rate"],
+        weight_decay=train_cfg.get("weight_decay", 0.0),
+    )
 
-    best_val_accuracy = -1.0
+    trainable_parameters = sum(parameter.numel() for parameter in model.parameters() if parameter.requires_grad)
+    print(f"device={device} trainable_parameters={trainable_parameters:,}")
+
+    best_val_macro_f1 = -1.0
     best_val_loss = float("inf")
     checkpoint_path = config["training"]["checkpoint_path"]
 
@@ -122,8 +136,9 @@ def main() -> None:
             optimizer,
             device,
             epoch,
+            gradient_clip_norm=train_cfg.get("gradient_clip_norm"),
         )
-        val_loss, val_accuracy, _, _ = evaluate_model(
+        val_loss, val_accuracy, y_true, y_pred = evaluate_model(
             model,
             feature_extractor,
             val_loader,
@@ -131,17 +146,24 @@ def main() -> None:
             device,
             show_progress=False,
         )
+        val_metrics, _ = compute_classification_metrics(
+            y_true,
+            y_pred,
+            train_dataset.classes,
+        )
+        val_macro_f1 = val_metrics["macro_f1"]
         print(
             f"epoch={epoch:02d} "
             f"train_loss={train_loss:.4f} train_acc={train_accuracy:.4f} "
-            f"val_loss={val_loss:.4f} val_acc={val_accuracy:.4f}"
+            f"val_loss={val_loss:.4f} val_acc={val_accuracy:.4f} "
+            f"val_macro_f1={val_macro_f1:.4f}"
         )
 
-        is_best = val_accuracy > best_val_accuracy or (
-            val_accuracy == best_val_accuracy and val_loss < best_val_loss
+        is_best = val_macro_f1 > best_val_macro_f1 or (
+            val_macro_f1 == best_val_macro_f1 and val_loss < best_val_loss
         )
         if is_best:
-            best_val_accuracy = val_accuracy
+            best_val_macro_f1 = val_macro_f1
             best_val_loss = val_loss
             save_checkpoint(
                 checkpoint_path,
@@ -152,9 +174,10 @@ def main() -> None:
                 epoch,
                 val_loss,
                 val_accuracy,
+                val_macro_f1,
             )
 
-    print(f"best_checkpoint={checkpoint_path} val_acc={best_val_accuracy:.4f}")
+    print(f"best_checkpoint={checkpoint_path} val_macro_f1={best_val_macro_f1:.4f}")
     test_metrics = evaluate_checkpoint(config, checkpoint_path, split="testing", prefix="test")
     print(f"test_accuracy={test_metrics['accuracy']:.4f} test_macro_f1={test_metrics['macro_f1']:.4f}")
 

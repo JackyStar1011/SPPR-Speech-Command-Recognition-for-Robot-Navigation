@@ -229,3 +229,8 @@ outputs/figures/*
 outputs/metrics/*
 !outputs/metrics/.gitkeep
 data/test_myVoice
+data/my_voice_test/**/*.wav
+
+# Audio samples and trained model weights
+*.wav
+*.pt

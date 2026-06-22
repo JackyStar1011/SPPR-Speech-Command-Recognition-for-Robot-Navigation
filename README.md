@@ -1,132 +1,113 @@
-# Speech Command Recognition for Robot Navigation
+# Speech Command Recognition with CNN-GRU
 
-Baseline supervised speech command recognition project for mapping short voice clips to robot navigation intents.
+Nhận dạng sáu lớp lệnh giọng nói cho robot:
 
-Target labels:
-
-- `forward`
-- `backward`
-- `left`
-- `right`
-- `stop`
+- `forward`, `backward`, `left`, `right`, `stop`
 - `unknown`
 
-Robot action mapping:
+Pipeline chính:
 
-| Command | Action |
-| --- | --- |
-| `forward` | `MOVE_FORWARD` |
-| `backward` | `MOVE_BACKWARD` |
-| `left` | `TURN_LEFT` |
-| `right` | `TURN_RIGHT` |
-| `stop` | `STOP` |
-| `unknown` | `IGNORE` |
-
-## Setup
-
-```bash
-python -m venv .venv
-.venv\Scripts\activate
-python -m pip install -r requirements.txt
+```text
+waveform 16 kHz, 1 giây
+  -> Log-Mel Spectrogram (64 mel bins)
+  -> CNN trích xuất đặc trưng tần số-thời gian
+  -> GRU mô hình hóa chuỗi frame
+  -> temporal mean pooling
+  -> bộ phân loại 6 lớp
 ```
 
-The project uses `torchaudio.datasets.SPEECHCOMMANDS`. The first training or evaluation run downloads the dataset into `data/raw/`.
+## Cài đặt
 
-## Configuration
+```powershell
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+```
 
-Default configuration lives in `configs/baseline.yaml`.
+Dataset Speech Commands được tải tự động vào `data/raw` khi chạy lần đầu.
 
-Important defaults:
+## Cấu hình
 
-- sample rate: `16000`
-- clip duration: `1.0` second
-- waveform length: `16000` samples
-- Log-Mel: `n_fft=400`, `win_length=400`, `hop_length=160`, `n_mels=64`
-- batch size: `64`
-- optimizer: Adam with learning rate `1e-3`
-- epochs: `20`
-- checkpoint: `outputs/checkpoints/best_cnn.pt`
+Cấu hình mặc định: `configs/cnn_gru.yaml`.
+
+- Audio: 16 kHz, 1 giây
+- Log-Mel: `n_fft=400`, `hop_length=160`, `n_mels=64`
+- CNN channels: `16 -> 32 -> 64`
+- GRU: 2 tầng, hidden size 128, một chiều
+- Optimizer: AdamW, learning rate `1e-3`
+- Checkpoint: `outputs/checkpoints/best_cnn_gru.pt`
 
 ## Train
 
-```bash
-python -m src.training.train --config configs/baseline.yaml
+```powershell
+python -m src.training.train --config configs/cnn_gru.yaml
 ```
 
-Training uses the official Speech Commands train/validation/test splits. The five main commands are kept as explicit classes. All other words are mapped to `unknown`, with the unknown class sampled to roughly match the average size of a main command class.
-
-The best checkpoint is saved by validation accuracy. After training, the script evaluates the best checkpoint on the test split.
+Model tốt nhất trên validation được lưu vào đường dẫn checkpoint trong config. Sau
+khi train xong, chương trình tự đánh giá trên test set.
 
 ## Evaluate
 
-```bash
-python -m src.training.evaluate --config configs/baseline.yaml --checkpoint outputs/checkpoints/best_cnn.pt
+```powershell
+python -m src.training.evaluate `
+  --config configs/cnn_gru.yaml `
+  --checkpoint outputs/checkpoints/best_cnn_gru.pt
 ```
 
-Saved artifacts:
+Kết quả gồm accuracy, macro-F1, precision/recall/F1 từng lớp và confusion matrix.
 
-- `outputs/metrics/test_metrics.json`
-- `outputs/metrics/classification_report.txt`
-- `outputs/figures/test_confusion_matrix.png`
+## Tune confidence threshold
 
-Metrics include accuracy, macro F1, and per-class precision/recall/F1.
+Không dùng threshold của model cũ. Sau khi train CNN-GRU, chọn threshold chỉ trên
+validation rồi mới áp dụng lên test:
 
-## WAV Inference
+```powershell
+python -m src.training.tune_threshold `
+  --config configs/cnn_gru.yaml `
+  --checkpoint outputs/checkpoints/best_cnn_gru.pt
+```
 
-```bash
+Trước khi tune, `inference.threshold: 0.0` tương đương với dự đoán argmax.
+
+## Inference
+
+File WAV:
+
+```powershell
 python -m src.inference.infer_wav --file path\to\audio.wav
 ```
 
-Optional arguments:
+Microphone:
 
-```bash
-python -m src.inference.infer_wav ^
-  --file path\to\audio.wav ^
-  --checkpoint outputs/checkpoints/best_cnn.pt ^
-  --threshold 0.70 ^
-  --device auto
+```powershell
+python -m src.inference.infer_mic --seconds 1.0
 ```
 
-The script prints:
+Streamlit:
 
-- predicted command
-- raw model command
-- confidence
-- mapped robot action
-
-If confidence is below the threshold, the output command becomes `unknown` and the robot action becomes `IGNORE`.
-
-## Microphone Inference
-
-```bash
-python -m src.inference.infer_mic --seconds 1.0 --threshold 0.70
-```
-
-This records from the default microphone using `sounddevice`, then runs the same preprocessing and classifier as WAV inference.
-
-## Streamlit Demo
-
-```bash
+```powershell
 streamlit run app/streamlit_app.py
 ```
 
-The app lets you upload a WAV file, inspect its waveform and Log-Mel spectrogram, and view the predicted command, confidence, and robot action.
+## Kiểm thử
 
-## Project Structure
-
-```text
-configs/baseline.yaml          Training and preprocessing config
-src/data/dataset.py            Speech Commands dataset wrapper with balanced unknown sampling
-src/data/preprocess.py         Resample, mono conversion, fixed-length waveform, amplitude normalization
-src/features/logmel.py         Log-Mel feature extraction
-src/models/cnn.py              Small CNN classifier
-src/training/train.py          Training loop and best checkpoint saving
-src/training/evaluate.py       Evaluation script and artifact generation
-src/inference/infer_wav.py     WAV file inference CLI
-src/inference/infer_mic.py     Microphone inference CLI
-src/inference/predictor.py     Shared checkpoint loading and prediction logic
-src/robot/actions.py           Command-to-action mapping
-app/streamlit_app.py           Upload-based demo UI
+```powershell
+python -m unittest discover -s tests -v
 ```
 
-Generated data, checkpoints, figures, and metrics are ignored by Git except for `.gitkeep` placeholders.
+## Cấu trúc chính
+
+```text
+configs/cnn_gru.yaml          Cấu hình dữ liệu, đặc trưng và huấn luyện
+src/data/                     Dataset và tiền xử lý waveform
+src/features/logmel.py        Trích xuất Log-Mel Spectrogram
+src/models/cnn_gru.py         Kiến trúc CNN-GRU
+src/training/                 Train, evaluate và tune threshold
+src/inference/                Inference WAV và microphone
+app/streamlit_app.py          Giao diện demo
+tests/                        Unit tests
+```
+
+Để so sánh công bằng với model khác, phải giữ nguyên Speech Commands split, danh
+sách lớp, preprocessing và các chỉ số: accuracy, macro-F1, recall lớp `unknown`,
+số tham số và thời gian inference.
