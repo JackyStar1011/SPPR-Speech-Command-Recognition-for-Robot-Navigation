@@ -13,7 +13,7 @@ from tqdm import tqdm
 
 from src.data.dataset import create_dataset
 from src.features.logmel import build_logmel_extractor
-from src.models.cnn_gru import build_model
+from src.models import build_model
 from src.training.train import build_loader
 from src.utils.config import load_config
 from src.utils.metrics import (

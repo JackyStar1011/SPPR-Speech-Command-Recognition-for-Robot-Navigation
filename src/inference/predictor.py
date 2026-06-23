@@ -6,7 +6,7 @@ import torch
 
 from src.data.preprocess import get_speech_alignment_config, load_waveform, preprocess_waveform
 from src.features.logmel import build_logmel_extractor
-from src.models.cnn_gru import build_model
+from src.models import build_model
 from src.robot.actions import label_to_action
 from src.utils.config import load_config
 from src.utils.seed import resolve_device
