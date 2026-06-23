@@ -1,0 +1,38 @@
+﻿seed: 42
+device: cpu
+
+data:
+  root: data/raw
+  download: true
+  commands:
+    - forward
+    - backward
+    - left
+    - right
+    - stop
+  unknown_label: unknown
+  sample_rate: 16000
+  duration_seconds: 1.0
+  unknown_ratio: 1.0
+  batch_size: 64
+  num_workers: 2
+
+features:
+  n_mfcc: 40
+  n_fft: 400
+  win_length: 400
+  hop_length: 160
+  n_mels: 64
+
+model:
+  dropout: 0.3
+
+training:
+  epochs: 30
+  learning_rate: 0.001
+  checkpoint_path: outputs/checkpoints/best_mfcc_cnn.pt
+
+outputs:
+  figures_dir: outputs/figures
+  metrics_dir: outputs/metrics
+
