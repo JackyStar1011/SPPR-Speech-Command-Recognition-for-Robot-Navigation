@@ -95,6 +95,9 @@ streamlit run app/streamlit_app.py
 python -m unittest discover -s tests -v
 ```
 
+Ứng dụng Streamlit thu lệnh trực tiếp từ microphone, hiển thị waveform và Log-Mel
+spectrogram, áp dụng lệnh dự đoán vào mô phỏng robot và cho phép xuất báo cáo HTML.
+
 ## Cấu trúc chính
 
 ```text
@@ -104,6 +107,7 @@ src/features/logmel.py        Trích xuất Log-Mel Spectrogram
 src/models/cnn_gru.py         Kiến trúc CNN-GRU
 src/training/                 Train, evaluate và tune threshold
 src/inference/                Inference WAV và microphone
+src/robot/                    Ánh xạ hành động và mô phỏng robot
 app/streamlit_app.py          Giao diện demo
 tests/                        Unit tests
 ```

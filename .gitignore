@@ -234,3 +234,7 @@ data/my_voice_test/**/*.wav
 # Audio samples and trained model weights
 *.wav
 *.pt
+
+# Local report drafts and helper scripts
+reports/
+scripts/
