@@ -10,7 +10,7 @@ from tqdm import tqdm
 
 from src.data.dataset import create_dataset
 from src.features.logmel import build_logmel_extractor
-from src.models.cnn import build_model
+from src.models.cnn_gru import build_model
 from src.utils.config import load_config
 from src.utils.metrics import (
     compute_classification_metrics,
@@ -92,8 +92,8 @@ def evaluate_checkpoint(config: dict, checkpoint_path: str, split: str = "testin
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Evaluate a Speech Command CNN checkpoint.")
-    parser.add_argument("--config", default="configs/baseline.yaml")
+    parser = argparse.ArgumentParser(description="Evaluate a Speech Command CNN-GRU checkpoint.")
+    parser.add_argument("--config", default="configs/cnn_gru.yaml")
     parser.add_argument("--checkpoint", default=None)
     parser.add_argument("--split", default="testing", choices=["training", "validation", "testing"])
     parser.add_argument("--prefix", default="test")

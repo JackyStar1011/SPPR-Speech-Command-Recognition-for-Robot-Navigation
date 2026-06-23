@@ -140,10 +140,11 @@ def main() -> None:
     st.title("Speech Command Robot Demo")
 
     with st.sidebar:
-        config_path = st.text_input("Config", value="configs/baseline.yaml")
+        config_path = st.text_input("Config", value="configs/cnn_gru.yaml")
         config = load_config(config_path)
         checkpoint_path = st.text_input("Checkpoint", value=config["training"]["checkpoint_path"])
-        threshold = st.slider("Confidence threshold", 0.0, 1.0, 0.70, 0.01)
+        default_threshold = float(config.get("inference", {}).get("threshold", 0.70))
+        threshold = st.slider("Confidence threshold", 0.0, 1.0, default_threshold, 0.01)
         record_seconds = st.number_input("Record seconds", min_value=0.25, max_value=3.0, value=1.0, step=0.25)
         device = st.selectbox("Device", ["auto", "cpu", "cuda"], index=0)
         reset_clicked = st.button("Reset simulator")
