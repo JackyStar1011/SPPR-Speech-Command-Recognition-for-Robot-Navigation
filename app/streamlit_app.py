@@ -5,6 +5,7 @@ import html
 from io import BytesIO
 from pathlib import Path
 import sys
+import wave
 
 import matplotlib.pyplot as plt
 import sounddevice as sd
@@ -17,6 +18,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from src.features.logmel import build_logmel_extractor
 from src.inference.predictor import SpeechCommandPredictor
+from src.robot.safety import SafetyDecisionLayer
 from src.robot.simulator import RobotSimulator
 from src.utils.config import load_config
 
@@ -28,7 +30,7 @@ def load_predictor(checkpoint_path: str, config_path: str, device: str) -> Speec
 
 def get_robot_simulator() -> RobotSimulator:
     if "robot_simulator" not in st.session_state:
-        st.session_state.robot_simulator = RobotSimulator(width=8, height=8)
+        st.session_state.robot_simulator = RobotSimulator(width=12, height=12)
     return st.session_state.robot_simulator
 
 
@@ -47,6 +49,23 @@ def record_microphone(sample_rate: int, seconds: float) -> torch.Tensor:
     )
     sd.wait()
     return torch.from_numpy(audio.T.copy())
+
+
+def waveform_to_wav_bytes(waveform: torch.Tensor, sample_rate: int) -> bytes:
+    buffer = BytesIO()
+    audio = waveform.squeeze().detach().cpu().clamp(-1.0, 1.0)
+    pcm = (audio * 32767.0).short().numpy().tobytes()
+    with wave.open(buffer, "wb") as wav_file:
+        wav_file.setnchannels(1)
+        wav_file.setsampwidth(2)
+        wav_file.setframerate(sample_rate)
+        wav_file.writeframes(pcm)
+    return buffer.getvalue()
+
+
+def audio_to_data_uri(audio_bytes: bytes) -> str:
+    encoded = base64.b64encode(audio_bytes).decode("ascii")
+    return f"data:audio/wav;base64,{encoded}"
 
 
 def plot_waveform(waveform, sample_rate: int):
@@ -92,6 +111,9 @@ def build_export_html(rows: list[dict[str, object]]) -> str:
             f"<td>{html.escape(str(row['Action']))}</td>"
             f"<td>{html.escape(str(row['Position']))}</td>"
             f"<td>{html.escape(str(row['Direction']))}</td>"
+            f"<td>{html.escape(str(row.get('Status', '')))}</td>"
+            f"<td>{html.escape(str(row.get('Reason', '')))}</td>"
+            f"<td><audio controls src=\"{row.get('AudioData', '')}\"></audio></td>"
             f"<td><img src=\"{row['Waveform']}\" alt=\"Waveform\"/></td>"
             f"<td><img src=\"{row['Log-Mel']}\" alt=\"Log-Mel spectrogram\"/></td>"
             "</tr>"
@@ -122,6 +144,9 @@ def build_export_html(rows: list[dict[str, object]]) -> str:
         <th>Action</th>
         <th>Position</th>
         <th>Direction</th>
+        <th>Status</th>
+        <th>Reason</th>
+        <th>Audio</th>
         <th>Waveform</th>
         <th>Log-Mel</th>
       </tr>
@@ -136,14 +161,15 @@ def build_export_html(rows: list[dict[str, object]]) -> str:
 
 
 def main() -> None:
-    st.set_page_config(page_title="Speech Command Robot Demo", layout="wide")
-    st.title("Speech Command Robot Demo")
+    st.set_page_config(page_title="Speech Command Wheelchair Demo", layout="wide")
+    st.title("Speech Command Wheelchair Demo")
 
     with st.sidebar:
         config_path = st.text_input("Config", value="configs/cnn_gru.yaml")
         config = load_config(config_path)
         checkpoint_path = st.text_input("Checkpoint", value=config["training"]["checkpoint_path"])
-        default_threshold = float(config.get("inference", {}).get("threshold", 0.70))
+        configured_threshold = float(config.get("inference", {}).get("threshold", 0.70))
+        default_threshold = configured_threshold if configured_threshold > 0.0 else 0.70
         threshold = st.slider("Confidence threshold", 0.0, 1.0, default_threshold, 0.01)
         record_seconds = st.number_input("Record seconds", min_value=0.25, max_value=3.0, value=1.0, step=0.25)
         device = st.selectbox("Device", ["auto", "cpu", "cuda"], index=0)
@@ -159,8 +185,10 @@ def main() -> None:
 
     result = None
     applied_event = None
+    safety_decision = None
     waveform = None
     logmel = None
+    audio_bytes = None
     data_cfg = config["data"]
 
     if record_clicked:
@@ -169,6 +197,7 @@ def main() -> None:
             try:
                 with st.spinner("Recording..."):
                     waveform = record_microphone(sample_rate, float(record_seconds))
+                audio_bytes = waveform_to_wav_bytes(waveform, sample_rate)
                 feature_extractor = build_logmel_extractor(config)
                 logmel = feature_extractor(waveform)
 
@@ -176,23 +205,32 @@ def main() -> None:
                 result = predictor.predict_waveform(
                     waveform,
                     sample_rate=sample_rate,
-                    threshold=threshold,
+                    threshold=0.0,
                 )
-                applied_event = simulator.apply_command(
-                    str(result["label"]),
+                safety_decision = SafetyDecisionLayer(
+                    confidence_threshold=threshold,
+                    unknown_label=str(predictor.unknown_label),
+                ).decide(
+                    raw_label=str(result["raw_label"]),
                     confidence=float(result["confidence"]),
                 )
+                applied_event = simulator.apply_decision(safety_decision)
                 waveform_image = figure_to_data_uri(plot_waveform(waveform, sample_rate))
                 logmel_image = figure_to_data_uri(plot_logmel(logmel))
+                audio_label = f"Recording {applied_event['step']}"
                 prediction_results.append(
                     {
                         "Step": applied_event["step"],
-                        "Command": result["label"],
+                        "Command": safety_decision.label,
                         "Raw command": result["raw_label"],
                         "Confidence": f"{float(result['confidence']):.2%}",
-                        "Action": result["action"],
+                        "Action": safety_decision.action,
                         "Position": str(applied_event["position"]),
                         "Direction": applied_event["direction"],
+                        "Status": applied_event["status"],
+                        "Reason": applied_event["reason"],
+                        "Audio": audio_label,
+                        "AudioData": audio_to_data_uri(audio_bytes),
                         "Waveform": waveform_image,
                         "Log-Mel": logmel_image,
                     }
@@ -212,19 +250,29 @@ def main() -> None:
         state_metric_2.metric("Direction", state.direction)
 
         if result is None:
-            st.metric("Robot action", "WAITING")
+            st.metric("Wheelchair action", "WAITING")
         else:
-            st.metric("Predicted command", str(result["label"]))
+            display_label = safety_decision.label if safety_decision is not None else str(result["label"])
+            display_action = safety_decision.action if safety_decision is not None else str(result["action"])
+            st.metric("Predicted command", str(display_label))
+            st.metric("Raw command", str(result["raw_label"]))
             st.metric("Confidence", f"{result['confidence']:.2%}")
-            st.metric("Robot action", str(result["action"]))
+            st.metric("Wheelchair action", str(display_action))
             if applied_event is not None and applied_event["blocked"]:
                 st.warning("Movement blocked by map boundary.")
+            elif applied_event is not None and applied_event["status"] == "rejected":
+                st.warning("Command rejected because confidence is below the safety threshold.")
+            elif applied_event is not None and applied_event["status"] == "ignored":
+                st.info("Command ignored by the safety layer.")
 
         history_rows = simulator.history_rows()
         if history_rows:
             st.dataframe(history_rows, use_container_width=True, hide_index=True)
 
     if waveform is not None and logmel is not None:
+        if audio_bytes is not None:
+            st.subheader("Recorded audio")
+            st.audio(audio_bytes, format="audio/wav")
         left_col, right_col = st.columns(2)
         with left_col:
             st.pyplot(plot_waveform(waveform, data_cfg["sample_rate"]), clear_figure=True)
@@ -234,7 +282,7 @@ def main() -> None:
     if prediction_results:
         st.subheader("Export results")
         st.dataframe(
-            prediction_results,
+            [{key: value for key, value in row.items() if key != "AudioData"} for row in prediction_results],
             use_container_width=True,
             hide_index=True,
             column_config={
@@ -242,6 +290,15 @@ def main() -> None:
                 "Log-Mel": st.column_config.ImageColumn("Log-Mel"),
             },
         )
+        with st.expander("Recorded audio history"):
+            for row in prediction_results:
+                st.caption(
+                    f"Step {row['Step']} - {row['Command']} "
+                    f"({row['Confidence']}) - {row['Status']}"
+                )
+                audio_data = str(row.get("AudioData", ""))
+                if audio_data.startswith("data:audio/wav;base64,"):
+                    st.audio(base64.b64decode(audio_data.split(",", 1)[1]), format="audio/wav")
         st.download_button(
             "Download HTML report",
             data=build_export_html(prediction_results),
