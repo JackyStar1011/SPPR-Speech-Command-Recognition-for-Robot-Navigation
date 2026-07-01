@@ -233,6 +233,8 @@ def main() -> None:
         default_threshold = configured_threshold if configured_threshold > 0.0 else 0.70
         threshold = st.slider("Confidence threshold", 0.0, 1.0, default_threshold, 0.01)
         record_seconds = st.number_input("Record seconds", min_value=0.25, max_value=3.0, value=1.0, step=0.25)
+        wake_word_detected = st.checkbox("Wake word detected", value=True)
+        listening = st.checkbox("Listening", value=True)
         device = st.selectbox("Device", ["auto", "cpu", "cuda"], index=0)
         reset_clicked = st.button("Reset simulator")
 
@@ -268,12 +270,17 @@ def main() -> None:
                     sample_rate=sample_rate,
                     threshold=0.0,
                 )
-                safety_decision = SafetyDecisionLayer(
-                    confidence_threshold=threshold,
-                    unknown_label=str(predictor.unknown_label),
-                ).decide(
+                safety_config = dict(config)
+                safety_settings = dict(config.get("safety", {}))
+                safety_settings["confidence_threshold"] = threshold
+                safety_settings["unknown_label"] = str(predictor.unknown_label)
+                safety_config["safety"] = safety_settings
+                safety_decision = SafetyDecisionLayer.from_config(safety_config).decide(
                     raw_label=str(result["raw_label"]),
                     confidence=float(result["confidence"]),
+                    wake_word_detected=wake_word_detected,
+                    listening=listening,
+                    elapsed_since_wake_seconds=float(record_seconds),
                 )
                 applied_event = simulator.apply_decision(safety_decision)
                 waveform_image = figure_to_data_uri(plot_waveform(waveform, sample_rate))
