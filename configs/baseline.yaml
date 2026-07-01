@@ -68,6 +68,23 @@ training:
   learning_rate: 0.001
   checkpoint_path: outputs/checkpoints/best_cnn.pt
 
+inference:
+  threshold: 0.0
+  align_speech: true
+
+safety:
+  confidence_threshold: 0.70
+  unknown_label: unknown
+  allowed_commands:
+    - forward
+    - backward
+    - left
+    - right
+    - stop
+  require_wake_word: false
+  command_timeout_seconds: 3.0
+  stop_confidence_threshold: 0.0
+
 outputs:
   figures_dir: outputs/figures
   metrics_dir: outputs/metrics
