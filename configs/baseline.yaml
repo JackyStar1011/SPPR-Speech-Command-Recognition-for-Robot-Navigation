@@ -23,6 +23,42 @@ features:
   hop_length: 160
   n_mels: 64
 
+preprocessing:
+  noise_reduction:
+    enabled: false
+    n_fft: 400
+    win_length: 400
+    hop_length: 160
+    noise_quantile: 0.2
+    reduction_strength: 0.8
+    residual_floor: 0.05
+  speech_alignment:
+    enabled: false
+    frame_length_ms: 25.0
+    hop_length_ms: 10.0
+    padding_ms: 120.0
+    max_gap_ms: 150.0
+    noise_multiplier: 3.0
+    minimum_peak_ratio: 0.08
+
+augmentation:
+  enabled: false
+  normalize_after: true
+  gain:
+    enabled: true
+    probability: 0.5
+    min_db: -6.0
+    max_db: 6.0
+  time_shift:
+    enabled: true
+    probability: 0.5
+    max_ms: 100.0
+  add_noise:
+    enabled: true
+    probability: 0.5
+    min_snr_db: 5.0
+    max_snr_db: 20.0
+
 model:
   type: cnn
   dropout: 0.3

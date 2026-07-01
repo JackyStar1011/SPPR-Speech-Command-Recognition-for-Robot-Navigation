@@ -1,8 +1,10 @@
 import unittest
 
+import math
+
 import torch
 
-from src.data.preprocess import align_active_speech, preprocess_waveform
+from src.data.preprocess import align_active_speech, preprocess_waveform, reduce_stationary_noise
 
 
 class SpeechAlignmentTests(unittest.TestCase):
@@ -50,6 +52,27 @@ class SpeechAlignmentTests(unittest.TestCase):
 
         self.assertEqual(aligned.shape, (1, 1000))
         self.assertEqual(aligned.count_nonzero().item(), 0)
+
+    def test_noise_reduction_lowers_stationary_noise_region(self) -> None:
+        sample_rate = 16000
+        time_axis = torch.arange(sample_rate, dtype=torch.float32) / sample_rate
+        speech = torch.zeros(1, sample_rate)
+        speech[:, 6000:10000] = 0.6 * torch.sin(2 * math.pi * 440 * time_axis[6000:10000])
+        noise = 0.05 * torch.sin(2 * math.pi * 120 * time_axis).unsqueeze(0)
+        noisy = speech + noise
+
+        reduced = reduce_stationary_noise(
+            noisy,
+            n_fft=400,
+            win_length=400,
+            hop_length=160,
+            reduction_strength=0.9,
+        )
+
+        before_noise_rms = noisy[:, :3000].square().mean().sqrt()
+        after_noise_rms = reduced[:, :3000].square().mean().sqrt()
+        self.assertEqual(reduced.shape, noisy.shape)
+        self.assertLess(after_noise_rms.item(), before_noise_rms.item())
 
 
 if __name__ == "__main__":

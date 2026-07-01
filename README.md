@@ -32,6 +32,10 @@ Cấu hình mặc định: `configs/cnn_gru.yaml`.
 
 - Audio: 16 kHz, 1 giây
 - Log-Mel: `n_fft=400`, `hop_length=160`, `n_mels=64`
+- Preprocessing: mono, resample, pad/trim, amplitude normalization; có cấu hình
+  `speech_alignment` và `noise_reduction` để bật khi retrain hoặc demo robustness
+- Training augmentation: có thể bật add noise theo SNR, time shift và gain/volume
+  perturbation trong `augmentation`
 - CNN channels: `16 -> 32 -> 64`
 - GRU: 2 tầng, hidden size 128, một chiều
 - Optimizer: AdamW, learning rate `1e-3`
