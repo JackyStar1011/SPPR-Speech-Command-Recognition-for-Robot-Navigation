@@ -5,6 +5,7 @@ from typing import Any
 
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
+from matplotlib.transforms import Affine2D
 
 from src.robot.actions import label_to_action
 from src.robot.safety import SafetyDecision
@@ -216,71 +217,67 @@ class RobotSimulator:
     def _draw_wheelchair(self, ax) -> None:
         x, y = self.state.position
         dx, dy = DIRECTION_DELTAS[self.state.direction]
+        direction_angles = {
+            "EAST": 0,
+            "NORTH": 90,
+            "WEST": 180,
+            "SOUTH": -90,
+        }
+        transform = (
+            Affine2D().rotate_deg_around(x, y, direction_angles[self.state.direction])
+            + ax.transData
+        )
+
+        def to_data(points: list[tuple[float, float]]) -> list[tuple[float, float]]:
+            return [(x + px, y + py) for px, py in points]
+
+        icon_color = "#050505"
+        outline_color = "white"
 
         ax.add_patch(
-            patches.Circle(
-                (x - 0.27, y - 0.08),
-                0.23,
-                facecolor="#bfdbfe",
-                edgecolor="#1e40af",
-                linewidth=2.2,
-                zorder=5,
-            )
-        )
-        ax.add_patch(
-            patches.Circle(
-                (x + 0.27, y - 0.08),
-                0.23,
-                facecolor="#bfdbfe",
-                edgecolor="#1e40af",
-                linewidth=2.2,
-                zorder=5,
+            patches.Arc(
+                (x - 0.15, y - 0.13),
+                width=0.58,
+                height=0.58,
+                theta1=78,
+                theta2=350,
+                linewidth=7.2,
+                color=icon_color,
+                zorder=6,
+                transform=transform,
             )
         )
         ax.add_patch(
             patches.Circle(
-                (x - 0.27, y - 0.08),
-                0.08,
-                facecolor="#1e3a8a",
-                edgecolor="white",
-                linewidth=1.2,
-                zorder=6,
+                (x - 0.14, y + 0.36),
+                0.11,
+                facecolor=icon_color,
+                edgecolor=outline_color,
+                linewidth=1.0,
+                zorder=7,
+                transform=transform,
             )
         )
-        ax.add_patch(
-            patches.Circle(
-                (x + 0.27, y - 0.08),
-                0.08,
-                facecolor="#1e3a8a",
-                edgecolor="white",
-                linewidth=1.2,
-                zorder=6,
+
+        line_specs = [
+            [(-0.22, 0.22), (-0.19, -0.02), (-0.05, -0.02), (0.16, -0.02)],
+            [(-0.18, 0.08), (0.17, 0.08)],
+            [(-0.05, -0.06), (0.18, -0.08), (0.32, -0.34)],
+            [(0.32, -0.34), (0.52, -0.29)],
+        ]
+        for points in line_specs:
+            xs, ys = zip(*to_data(points))
+            ax.plot(
+                xs,
+                ys,
+                color=icon_color,
+                linewidth=8.0,
+                solid_capstyle="butt",
+                solid_joinstyle="miter",
+                zorder=7,
+                transform=transform,
             )
-        )
-        ax.add_patch(
-            patches.FancyBboxPatch(
-                (x - 0.25, y - 0.2),
-                0.5,
-                0.42,
-                boxstyle="round,pad=0.03,rounding_size=0.08",
-                facecolor="#0f766e",
-                edgecolor="white",
-                linewidth=1.8,
-                zorder=6,
-            )
-        )
-        ax.add_patch(
-            patches.FancyBboxPatch(
-                (x - 0.18, y + 0.13),
-                0.36,
-                0.2,
-                boxstyle="round,pad=0.02,rounding_size=0.06",
-                facecolor="#14b8a6",
-                edgecolor="white",
-                linewidth=1.4,
-                zorder=6,
-            )
-        )
+
         ax.add_patch(
             patches.FancyArrowPatch(
                 (x - dx * 0.08, y - dy * 0.08),

@@ -10,6 +10,7 @@ import wave
 import matplotlib.pyplot as plt
 import sounddevice as sd
 import streamlit as st
+import streamlit.components.v1 as components
 import torch
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -160,6 +161,66 @@ def build_export_html(rows: list[dict[str, object]]) -> str:
 """
 
 
+def build_results_table_html(rows: list[dict[str, object]]) -> str:
+    table_rows = []
+    for row in rows:
+        table_rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(row['Step']))}</td>"
+            f"<td>{html.escape(str(row['Command']))}</td>"
+            f"<td>{html.escape(str(row['Raw command']))}</td>"
+            f"<td>{html.escape(str(row['Confidence']))}</td>"
+            f"<td>{html.escape(str(row['Action']))}</td>"
+            f"<td>{html.escape(str(row['Position']))}</td>"
+            f"<td>{html.escape(str(row['Direction']))}</td>"
+            f"<td>{html.escape(str(row.get('Status', '')))}</td>"
+            f"<td>{html.escape(str(row.get('Reason', '')))}</td>"
+            f"<td><audio controls preload=\"metadata\" src=\"{row.get('AudioData', '')}\"></audio></td>"
+            "</tr>"
+        )
+
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <style>
+    body {{ margin: 0; font-family: Arial, sans-serif; color: #f9fafb; background: transparent; }}
+    .table-wrap {{ overflow-x: auto; border: 1px solid #374151; border-radius: 8px; }}
+    table {{ border-collapse: collapse; width: 100%; min-width: 980px; font-size: 14px; }}
+    th, td {{ border-bottom: 1px solid #374151; padding: 10px 12px; text-align: left; vertical-align: middle; }}
+    th {{ background: #111827; color: #dbeafe; font-weight: 700; position: sticky; top: 0; }}
+    tr:nth-child(even) {{ background: rgba(31, 41, 55, 0.55); }}
+    tr:nth-child(odd) {{ background: rgba(17, 24, 39, 0.55); }}
+    audio {{ width: 190px; height: 34px; }}
+  </style>
+</head>
+<body>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Step</th>
+          <th>Command</th>
+          <th>Raw command</th>
+          <th>Confidence</th>
+          <th>Action</th>
+          <th>Position</th>
+          <th>Direction</th>
+          <th>Status</th>
+          <th>Reason</th>
+          <th>Audio</th>
+        </tr>
+      </thead>
+      <tbody>
+        {''.join(table_rows)}
+      </tbody>
+    </table>
+  </div>
+</body>
+</html>
+"""
+
+
 def main() -> None:
     st.set_page_config(page_title="Speech Command Wheelchair Demo", layout="wide")
     st.title("Speech Command Wheelchair Demo")
@@ -281,8 +342,13 @@ def main() -> None:
 
     if prediction_results:
         st.subheader("Export results")
+        table_height = min(560, 96 + len(prediction_results) * 58)
+        components.html(build_results_table_html(prediction_results), height=table_height, scrolling=True)
         st.dataframe(
-            [{key: value for key, value in row.items() if key != "AudioData"} for row in prediction_results],
+            [
+                {key: value for key, value in row.items() if key not in {"AudioData", "Audio"}}
+                for row in prediction_results
+            ],
             use_container_width=True,
             hide_index=True,
             column_config={
@@ -290,15 +356,6 @@ def main() -> None:
                 "Log-Mel": st.column_config.ImageColumn("Log-Mel"),
             },
         )
-        with st.expander("Recorded audio history"):
-            for row in prediction_results:
-                st.caption(
-                    f"Step {row['Step']} - {row['Command']} "
-                    f"({row['Confidence']}) - {row['Status']}"
-                )
-                audio_data = str(row.get("AudioData", ""))
-                if audio_data.startswith("data:audio/wav;base64,"):
-                    st.audio(base64.b64decode(audio_data.split(",", 1)[1]), format="audio/wav")
         st.download_button(
             "Download HTML report",
             data=build_export_html(prediction_results),
