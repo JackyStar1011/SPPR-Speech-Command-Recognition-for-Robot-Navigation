@@ -227,6 +227,8 @@ outputs/checkpoints/*
 !outputs/checkpoints/*.pt
 outputs/figures/*
 !outputs/figures/.gitkeep
+!outputs/figures/report_data_preparation/
+!outputs/figures/report_data_preparation/**
 outputs/metrics/*
 !outputs/metrics/.gitkeep
 data/test_myVoice
