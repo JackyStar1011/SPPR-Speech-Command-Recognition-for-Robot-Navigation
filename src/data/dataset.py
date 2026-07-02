@@ -8,7 +8,13 @@ import torch
 from torch.utils.data import Dataset
 import torchaudio
 
-from src.data.preprocess import get_speech_alignment_config, load_waveform, preprocess_waveform
+from src.data.augmentation import apply_waveform_augmentation
+from src.data.preprocess import (
+    get_noise_reduction_config,
+    get_speech_alignment_config,
+    load_waveform,
+    preprocess_waveform,
+)
 
 Split = Literal["training", "validation", "testing"]
 
@@ -27,6 +33,9 @@ class SpeechCommandsRobotDataset(Dataset):
         seed: int = 42,
         align_speech: bool = False,
         speech_alignment: dict | None = None,
+        apply_noise_reduction: bool = False,
+        noise_reduction: dict | None = None,
+        augmentation: dict | None = None,
     ) -> None:
         self.base = torchaudio.datasets.SPEECHCOMMANDS(
             root=root,
@@ -41,6 +50,9 @@ class SpeechCommandsRobotDataset(Dataset):
         self.num_samples = int(sample_rate * duration_seconds)
         self.align_speech = align_speech
         self.speech_alignment = speech_alignment or {}
+        self.apply_noise_reduction = apply_noise_reduction
+        self.noise_reduction = noise_reduction or {}
+        self.augmentation = augmentation or {}
         self.samples = self._build_balanced_index(unknown_ratio, seed)
 
     def _label_for_index(self, index: int) -> str:
@@ -92,6 +104,13 @@ class SpeechCommandsRobotDataset(Dataset):
             target_num_samples=self.num_samples,
             align_speech=self.align_speech,
             speech_alignment=self.speech_alignment,
+            apply_noise_reduction=self.apply_noise_reduction,
+            noise_reduction=self.noise_reduction,
+        )
+        waveform = apply_waveform_augmentation(
+            waveform,
+            sample_rate=self.sample_rate,
+            config=self.augmentation,
         )
         return waveform, self.class_to_idx[label]
 
@@ -99,6 +118,10 @@ class SpeechCommandsRobotDataset(Dataset):
 def create_dataset(config: dict, split: Split) -> SpeechCommandsRobotDataset:
     data_cfg = config["data"]
     align_speech, speech_alignment = get_speech_alignment_config(config)
+    apply_noise_reduction, noise_reduction = get_noise_reduction_config(config)
+    augmentation = config.get("augmentation", {})
+    if split != "training" or not augmentation.get("enabled", False):
+        augmentation = {}
     return SpeechCommandsRobotDataset(
         root=data_cfg["root"],
         split=split,
@@ -111,6 +134,9 @@ def create_dataset(config: dict, split: Split) -> SpeechCommandsRobotDataset:
         seed=config["seed"],
         align_speech=align_speech,
         speech_alignment=speech_alignment,
+        apply_noise_reduction=apply_noise_reduction,
+        noise_reduction=noise_reduction,
+        augmentation=augmentation,
     )
 
 

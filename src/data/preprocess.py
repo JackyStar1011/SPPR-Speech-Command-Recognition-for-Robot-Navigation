@@ -116,6 +116,56 @@ def normalize_amplitude(waveform: torch.Tensor, eps: float = 1e-8) -> torch.Tens
     return waveform / peak
 
 
+def reduce_stationary_noise(
+    waveform: torch.Tensor,
+    n_fft: int = 400,
+    win_length: int = 400,
+    hop_length: int = 160,
+    noise_quantile: float = 0.2,
+    reduction_strength: float = 0.8,
+    residual_floor: float = 0.05,
+) -> torch.Tensor:
+    """Reduce near-stationary background noise with simple spectral subtraction."""
+    if waveform.size(-1) == 0:
+        return waveform
+    if not 0.0 <= noise_quantile <= 1.0:
+        raise ValueError("noise_quantile must be between 0 and 1")
+    if not 0.0 <= reduction_strength <= 1.0:
+        raise ValueError("reduction_strength must be between 0 and 1")
+    if not 0.0 <= residual_floor <= 1.0:
+        raise ValueError("residual_floor must be between 0 and 1")
+
+    length = waveform.size(-1)
+    n_fft = min(n_fft, max(2, length))
+    win_length = min(win_length, n_fft)
+    hop_length = min(hop_length, win_length)
+    window = torch.hann_window(win_length, device=waveform.device, dtype=waveform.dtype)
+
+    spectrum = torch.stft(
+        waveform,
+        n_fft=n_fft,
+        hop_length=hop_length,
+        win_length=win_length,
+        window=window,
+        return_complex=True,
+    )
+    magnitude = spectrum.abs()
+    phase = torch.angle(spectrum)
+    noise_profile = torch.quantile(magnitude, noise_quantile, dim=-1, keepdim=True)
+    reduced_magnitude = (magnitude - reduction_strength * noise_profile).clamp_min(
+        magnitude * residual_floor
+    )
+    reduced_spectrum = torch.polar(reduced_magnitude, phase)
+    return torch.istft(
+        reduced_spectrum,
+        n_fft=n_fft,
+        hop_length=hop_length,
+        win_length=win_length,
+        window=window,
+        length=length,
+    )
+
+
 def preprocess_waveform(
     waveform: torch.Tensor,
     sample_rate: int,
@@ -124,10 +174,14 @@ def preprocess_waveform(
     normalize: bool = True,
     align_speech: bool = False,
     speech_alignment: dict | None = None,
+    apply_noise_reduction: bool = False,
+    noise_reduction: dict | None = None,
 ) -> torch.Tensor:
     waveform = to_mono(waveform.float())
     if sample_rate != target_sample_rate:
         waveform = torchaudio.functional.resample(waveform, sample_rate, target_sample_rate)
+    if apply_noise_reduction:
+        waveform = reduce_stationary_noise(waveform, **(noise_reduction or {}))
     if align_speech:
         waveform = align_active_speech(
             waveform,
@@ -148,6 +202,8 @@ def load_audio_file(
     target_num_samples: int = 16000,
     align_speech: bool = False,
     speech_alignment: dict | None = None,
+    apply_noise_reduction: bool = False,
+    noise_reduction: dict | None = None,
 ) -> torch.Tensor:
     waveform, sample_rate = load_waveform(path)
     return preprocess_waveform(
@@ -157,6 +213,8 @@ def load_audio_file(
         target_num_samples=target_num_samples,
         align_speech=align_speech,
         speech_alignment=speech_alignment,
+        apply_noise_reduction=apply_noise_reduction,
+        noise_reduction=noise_reduction,
     )
 
 
@@ -166,6 +224,14 @@ def get_speech_alignment_config(config: dict, inference: bool = False) -> tuple[
     if inference:
         enabled = bool(config.get("inference", {}).get("align_speech", enabled))
     return enabled, alignment
+
+
+def get_noise_reduction_config(config: dict, inference: bool = False) -> tuple[bool, dict]:
+    noise_reduction = dict(config.get("preprocessing", {}).get("noise_reduction", {}))
+    enabled = bool(noise_reduction.pop("enabled", False))
+    if inference:
+        enabled = bool(config.get("inference", {}).get("noise_reduction", enabled))
+    return enabled, noise_reduction
 
 
 def load_waveform(path: str) -> tuple[torch.Tensor, int]:

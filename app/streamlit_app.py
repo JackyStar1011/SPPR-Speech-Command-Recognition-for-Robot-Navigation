@@ -221,6 +221,17 @@ def build_results_table_html(rows: list[dict[str, object]]) -> str:
 """
 
 
+def safety_status_label(status: str) -> str:
+    labels = {
+        "accepted": "ACCEPT",
+        "applied": "EXECUTED",
+        "blocked": "BLOCKED",
+        "rejected": "REJECT",
+        "ignored": "IGNORE",
+    }
+    return labels.get(status, status.upper())
+
+
 def main() -> None:
     st.set_page_config(page_title="Speech Command Wheelchair Demo", layout="wide")
     st.title("Speech Command Wheelchair Demo")
@@ -228,11 +239,37 @@ def main() -> None:
     with st.sidebar:
         config_path = st.text_input("Config", value="configs/cnn_gru.yaml")
         config = load_config(config_path)
+        safety_cfg = config.get("safety", {})
         checkpoint_path = st.text_input("Checkpoint", value=config["training"]["checkpoint_path"])
-        configured_threshold = float(config.get("inference", {}).get("threshold", 0.70))
+        configured_threshold = float(
+            safety_cfg.get(
+                "confidence_threshold",
+                config.get("inference", {}).get("threshold", 0.70),
+            )
+        )
         default_threshold = configured_threshold if configured_threshold > 0.0 else 0.70
         threshold = st.slider("Confidence threshold", 0.0, 1.0, default_threshold, 0.01)
         record_seconds = st.number_input("Record seconds", min_value=0.25, max_value=3.0, value=1.0, step=0.25)
+        require_wake_word = st.checkbox(
+            "Require wake word",
+            value=bool(safety_cfg.get("require_wake_word", False)),
+        )
+        wake_word_detected = st.checkbox("Wake word detected", value=True)
+        listening = st.checkbox("Listening", value=True)
+        command_timeout = st.number_input(
+            "Command timeout (s)",
+            min_value=0.5,
+            max_value=10.0,
+            value=float(safety_cfg.get("command_timeout_seconds") or 3.0),
+            step=0.5,
+        )
+        stop_threshold = st.slider(
+            "Stop confidence threshold",
+            0.0,
+            1.0,
+            float(safety_cfg.get("stop_confidence_threshold", 0.0)),
+            0.01,
+        )
         device = st.selectbox("Device", ["auto", "cpu", "cuda"], index=0)
         reset_clicked = st.button("Reset simulator")
 
@@ -268,12 +305,20 @@ def main() -> None:
                     sample_rate=sample_rate,
                     threshold=0.0,
                 )
-                safety_decision = SafetyDecisionLayer(
-                    confidence_threshold=threshold,
-                    unknown_label=str(predictor.unknown_label),
-                ).decide(
+                safety_config = dict(config)
+                safety_settings = dict(config.get("safety", {}))
+                safety_settings["confidence_threshold"] = threshold
+                safety_settings["unknown_label"] = str(predictor.unknown_label)
+                safety_settings["require_wake_word"] = require_wake_word
+                safety_settings["command_timeout_seconds"] = command_timeout
+                safety_settings["stop_confidence_threshold"] = stop_threshold
+                safety_config["safety"] = safety_settings
+                safety_decision = SafetyDecisionLayer.from_config(safety_config).decide(
                     raw_label=str(result["raw_label"]),
                     confidence=float(result["confidence"]),
+                    wake_word_detected=wake_word_detected,
+                    listening=listening,
+                    elapsed_since_wake_seconds=float(record_seconds),
                 )
                 applied_event = simulator.apply_decision(safety_decision)
                 waveform_image = figure_to_data_uri(plot_waveform(waveform, sample_rate))
@@ -319,6 +364,31 @@ def main() -> None:
             st.metric("Raw command", str(result["raw_label"]))
             st.metric("Confidence", f"{result['confidence']:.2%}")
             st.metric("Wheelchair action", str(display_action))
+
+            if safety_decision is not None and applied_event is not None:
+                decision_status = safety_status_label(str(applied_event["status"]))
+                if safety_decision.accepted and not applied_event["blocked"]:
+                    st.success(f"Safety decision: {decision_status}")
+                elif applied_event["blocked"]:
+                    st.warning(f"Safety decision: {decision_status}")
+                elif applied_event["status"] == "rejected":
+                    st.warning(f"Safety decision: {decision_status}")
+                else:
+                    st.info(f"Safety decision: {decision_status}")
+
+                st.caption(str(applied_event["reason"]))
+                st.dataframe(
+                    [
+                        {"Rule": "Wake word required", "Value": str(require_wake_word)},
+                        {"Rule": "Wake word detected", "Value": str(wake_word_detected)},
+                        {"Rule": "Listening state", "Value": str(listening)},
+                        {"Rule": "Command timeout", "Value": f"{command_timeout:.1f}s"},
+                        {"Rule": "Confidence threshold", "Value": f"{threshold:.2f}"},
+                        {"Rule": "Stop threshold", "Value": f"{stop_threshold:.2f}"},
+                    ],
+                    use_container_width=True,
+                    hide_index=True,
+                )
             if applied_event is not None and applied_event["blocked"]:
                 st.warning("Movement blocked by map boundary.")
             elif applied_event is not None and applied_event["status"] == "rejected":

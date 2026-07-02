@@ -32,6 +32,10 @@ Cấu hình mặc định: `configs/cnn_gru.yaml`.
 
 - Audio: 16 kHz, 1 giây
 - Log-Mel: `n_fft=400`, `hop_length=160`, `n_mels=64`
+- Preprocessing: mono, resample, pad/trim, amplitude normalization; có cấu hình
+  `speech_alignment` và `noise_reduction` để bật khi retrain hoặc demo robustness
+- Training augmentation: có thể bật add noise theo SNR, time shift và gain/volume
+  perturbation trong `augmentation`
 - CNN channels: `16 -> 32 -> 64`
 - GRU: 2 tầng, hidden size 128, một chiều
 - Optimizer: AdamW, learning rate `1e-3`
@@ -98,6 +102,18 @@ python -m unittest discover -s tests -v
 Ứng dụng Streamlit thu lệnh trực tiếp từ microphone, hiển thị waveform và Log-Mel
 spectrogram, áp dụng lệnh dự đoán vào mô phỏng robot và cho phép xuất báo cáo HTML.
 
+## Safety validation
+
+Trước khi gửi lệnh tới mô phỏng xe lăn/robot, hệ thống đi qua rule-based safety
+layer:
+
+- bỏ qua lệnh khi wake-word chưa được xác nhận hoặc hệ thống không ở trạng thái listening
+- reject lệnh hết thời gian command window
+- reject confidence thấp hoặc label không thuộc tập lệnh điều hướng
+- map `unknown` thành `IGNORE`
+- ưu tiên `stop` với ngưỡng confidence riêng
+- simulator chặn di chuyển vượt biên bản đồ
+
 ## Cấu trúc chính
 
 ```text
@@ -107,7 +123,7 @@ src/features/logmel.py        Trích xuất Log-Mel Spectrogram
 src/models/cnn_gru.py         Kiến trúc CNN-GRU
 src/training/                 Train, evaluate và tune threshold
 src/inference/                Inference WAV và microphone
-src/robot/                    Ánh xạ hành động và mô phỏng robot
+src/robot/                    Safety validation, ánh xạ hành động và mô phỏng robot
 app/streamlit_app.py          Giao diện demo
 tests/                        Unit tests
 ```
