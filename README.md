@@ -1,20 +1,8 @@
-# Speech Command Recognition with CNN-GRU
+# Speech Command Recognition for Robot Navigation
 
-Nhận dạng sáu lớp lệnh giọng nói cho robot:
+Nhận dạng lệnh giọng nói cho robot bằng các mô hình CNN, CNN-GRU và MFCC-CNN.
 
-- `forward`, `backward`, `left`, `right`, `stop`
-- `unknown`
-
-Pipeline chính:
-
-```text
-waveform 16 kHz, 1 giây
-  -> Log-Mel Spectrogram (64 mel bins)
-  -> CNN trích xuất đặc trưng tần số-thời gian
-  -> GRU mô hình hóa chuỗi frame
-  -> temporal mean pooling
-  -> bộ phân loại 6 lớp
-```
+Các nhãn chính: `forward`, `backward`, `left`, `right`, `stop` và `unknown`.
 
 ## Cài đặt
 
@@ -24,110 +12,78 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-Dataset Speech Commands được tải tự động vào `data/raw` khi chạy lần đầu.
+Dataset Speech Commands được tải tự động vào `data/raw` trong lần chạy đầu tiên.
 
-## Cấu hình
+## Huấn luyện và đánh giá
 
-Cấu hình mặc định: `configs/cnn_gru.yaml`.
-
-- Audio: 16 kHz, 1 giây
-- Log-Mel: `n_fft=400`, `hop_length=160`, `n_mels=64`
-- Preprocessing: mono, resample, pad/trim, amplitude normalization; có cấu hình
-  `speech_alignment` và `noise_reduction` để bật khi retrain hoặc demo robustness
-- Training augmentation: có thể bật add noise theo SNR, time shift và gain/volume
-  perturbation trong `augmentation`
-- CNN channels: `16 -> 32 -> 64`
-- GRU: 2 tầng, hidden size 128, một chiều
-- Optimizer: AdamW, learning rate `1e-3`
-- Checkpoint: `outputs/checkpoints/best_cnn_gru.pt`
-
-## Train
+CNN-GRU:
 
 ```powershell
-python -m src.training.train --config configs/cnn_gru.yaml
-```
-
-Model tốt nhất trên validation được lưu vào đường dẫn checkpoint trong config. Sau
-khi train xong, chương trình tự đánh giá trên test set.
-
-## Evaluate
-
-```powershell
+python -m src.training.train --config configs/models/cnn_gru.yaml
 python -m src.training.evaluate `
-  --config configs/cnn_gru.yaml `
+  --config configs/models/cnn_gru.yaml `
   --checkpoint outputs/checkpoints/best_cnn_gru.pt
 ```
 
-Kết quả gồm accuracy, macro-F1, precision/recall/F1 từng lớp và confusion matrix.
+CNN baseline:
 
-## Tune confidence threshold
+```powershell
+python -m src.training.train --config configs/models/cnn.yaml
+```
 
-Không dùng threshold của model cũ. Sau khi train CNN-GRU, chọn threshold chỉ trên
-validation rồi mới áp dụng lên test:
+MFCC-CNN:
+
+```powershell
+python -m src.training.train_mfcc --config configs/models/mfcc_cnn.yaml
+python -m src.training.evaluate_mfcc `
+  --config configs/models/mfcc_cnn.yaml `
+  --checkpoint outputs/checkpoints/best_mfcc_cnn.pt
+```
+
+Tune confidence threshold:
 
 ```powershell
 python -m src.training.tune_threshold `
-  --config configs/cnn_gru.yaml `
+  --config configs/models/cnn_gru.yaml `
   --checkpoint outputs/checkpoints/best_cnn_gru.pt
 ```
 
-Trước khi tune, `inference.threshold: 0.0` tương đương với dự đoán argmax.
-
-## Inference
-
-File WAV:
+## Chạy inference
 
 ```powershell
 python -m src.inference.infer_wav --file path\to\audio.wav
-```
-
-Microphone:
-
-```powershell
 python -m src.inference.infer_mic --seconds 1.0
-```
-
-Streamlit:
-
-```powershell
+python -m src.inference.infer_wav_mfcc --file path\to\audio.wav
 streamlit run app/streamlit_app.py
 ```
+
+Ứng dụng Streamlit hiển thị waveform, Log-Mel spectrogram, kết quả dự đoán và mô phỏng
+chuyển động robot. Trước khi thực thi, lệnh đi qua lớp kiểm tra an toàn trong `src/robot`.
 
 ## Kiểm thử
 
 ```powershell
-python -m unittest discover -s tests -v
+python -m pytest
 ```
 
-Ứng dụng Streamlit thu lệnh trực tiếp từ microphone, hiển thị waveform và Log-Mel
-spectrogram, áp dụng lệnh dự đoán vào mô phỏng robot và cho phép xuất báo cáo HTML.
-
-## Safety validation
-
-Trước khi gửi lệnh tới mô phỏng xe lăn/robot, hệ thống đi qua rule-based safety
-layer:
-
-- bỏ qua lệnh khi wake-word chưa được xác nhận hoặc hệ thống không ở trạng thái listening
-- reject lệnh hết thời gian command window
-- reject confidence thấp hoặc label không thuộc tập lệnh điều hướng
-- map `unknown` thành `IGNORE`
-- ưu tiên `stop` với ngưỡng confidence riêng
-- simulator chặn di chuyển vượt biên bản đồ
-
-## Cấu trúc chính
+## Cấu trúc repository
 
 ```text
-configs/cnn_gru.yaml          Cấu hình dữ liệu, đặc trưng và huấn luyện
-src/data/                     Dataset và tiền xử lý waveform
-src/features/logmel.py        Trích xuất Log-Mel Spectrogram
-src/models/cnn_gru.py         Kiến trúc CNN-GRU
-src/training/                 Train, evaluate và tune threshold
-src/inference/                Inference WAV và microphone
-src/robot/                    Safety validation, ánh xạ hành động và mô phỏng robot
-app/streamlit_app.py          Giao diện demo
-tests/                        Unit tests
+app/                 Giao diện Streamlit
+configs/models/      Cấu hình cho từng mô hình
+data/                 Dữ liệu cục bộ; chỉ .gitkeep được commit
+docs/reports/         Tài liệu và biểu mẫu dự án
+docs/results/         Báo cáo kết quả thí nghiệm
+notebooks/            Notebook phân tích và huấn luyện Colab
+outputs/              Checkpoint, metrics và hình sinh ra
+scripts/              Công cụ tạo báo cáo và sơ đồ
+src/data/             Dataset và tiền xử lý waveform
+src/features/         Log-Mel và MFCC feature extraction
+src/models/           Kiến trúc mô hình và model factory
+src/training/         Huấn luyện, đánh giá và tune threshold
+src/inference/        Inference WAV, microphone và predictor
+src/robot/            Safety layer, ánh xạ hành động và simulator
+tests/                Bộ kiểm thử tự động
 ```
 
-Để so sánh công bằng với model khác, phải giữ nguyên Speech Commands split, danh
-sách lớp, preprocessing và các chỉ số: accuracy, macro-F1, recall lớp `unknown`,
-số tham số và thời gian inference.
+Kết quả CNN-GRU chi tiết nằm tại `docs/results/cnn_gru.md`.

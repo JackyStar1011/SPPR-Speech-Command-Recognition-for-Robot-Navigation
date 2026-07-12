@@ -8,7 +8,7 @@ import torch
 from torch.utils.data import Dataset
 import torchaudio
 
-from src.data.preprocessMFCC import load_waveform, preprocess_waveform
+from src.data.mfcc_preprocess import load_waveform, preprocess_waveform
 
 Split = Literal["training", "validation", "testing"]
 

@@ -93,7 +93,7 @@ def evaluate_checkpoint(config: dict, checkpoint_path: str, split: str = "testin
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Evaluate a Speech Command CNN-GRU checkpoint.")
-    parser.add_argument("--config", default="configs/cnn_gru.yaml")
+    parser.add_argument("--config", default="configs/models/cnn_gru.yaml")
     parser.add_argument("--checkpoint", default=None)
     parser.add_argument("--split", default="testing", choices=["training", "validation", "testing"])
     parser.add_argument("--prefix", default="test")

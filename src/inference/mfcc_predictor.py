@@ -4,17 +4,17 @@ from pathlib import Path
 
 import torch
 
-from src.features.featuresMFCC import build_mfcc_extractor
-from src.models.modelMFCC import build_model
-from src.data.preprocessMFCC import load_audio_file, preprocess_waveform
-from src.utils.utilsMFCC import label_to_action, load_config, resolve_device
+from src.data.mfcc_preprocess import load_audio_file, preprocess_waveform
+from src.features.mfcc import build_mfcc_extractor
+from src.models.mfcc_cnn import build_model
+from src.utils.mfcc_utils import label_to_action, load_config, resolve_device
 
 
 class MFCCSpeechCommandPredictor:
     def __init__(
         self,
         checkpoint_path: str,
-        config_path: str = "configs/configMFCC.yaml",
+        config_path: str = "configs/models/mfcc_cnn.yaml",
         device_name: str = "auto",
     ) -> None:
         self.config = load_config(config_path)

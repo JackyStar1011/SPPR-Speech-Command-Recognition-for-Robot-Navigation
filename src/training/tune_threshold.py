@@ -182,7 +182,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Tune the inference confidence threshold on validation and evaluate it on test."
     )
-    parser.add_argument("--config", default="configs/cnn_gru.yaml")
+    parser.add_argument("--config", default="configs/models/cnn_gru.yaml")
     parser.add_argument("--checkpoint", default=None)
     parser.add_argument("--min-threshold", type=float, default=0.00)
     parser.add_argument("--max-threshold", type=float, default=0.90)

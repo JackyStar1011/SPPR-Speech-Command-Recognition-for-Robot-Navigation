@@ -32,6 +32,8 @@ preprocessing:
     noise_quantile: 0.2
     reduction_strength: 0.8
     residual_floor: 0.05
+  # Keep disabled for the existing checkpoint, which was trained without
+  # speech alignment. Enable before the next full retraining run.
   speech_alignment:
     enabled: false
     frame_length_ms: 25.0
@@ -41,6 +43,8 @@ preprocessing:
     noise_multiplier: 3.0
     minimum_peak_ratio: 0.08
 
+# Training-only waveform augmentation. Keep disabled for the existing
+# checkpoint; enable before retraining for robustness experiments.
 augmentation:
   enabled: false
   normalize_after: true
@@ -60,14 +64,21 @@ augmentation:
     max_snr_db: 20.0
 
 model:
-  type: cnn
+  type: cnn_gru
+  conv_channels: [16, 32, 64]
+  gru_hidden_size: 128
+  gru_layers: 2
+  bidirectional: false
   dropout: 0.3
 
 training:
-  epochs: 30
+  epochs: 40
   learning_rate: 0.001
-  checkpoint_path: outputs/checkpoints/best_cnn.pt
+  weight_decay: 0.0001
+  gradient_clip_norm: 5.0
+  checkpoint_path: outputs/checkpoints/best_cnn_gru.pt
 
+# Use plain argmax until a threshold is selected on the validation split.
 inference:
   threshold: 0.0
   align_speech: true
@@ -82,7 +93,7 @@ safety:
     - right
     - stop
   require_wake_word: false
-  command_timeout_seconds: 3.0
+  command_timeout_seconds: 2.0
   stop_confidence_threshold: 0.0
 
 outputs:
