@@ -8,11 +8,11 @@ from torch import nn
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from src.data.datasetMFCC import create_datasets
-from src.training.evaluateMFCC import evaluate_checkpoint, evaluate_model
-from src.features.featuresMFCC import build_mfcc_extractor
-from src.models.modelMFCC import build_model
-from src.utils.utilsMFCC import load_config, resolve_device, set_seed
+from src.data.mfcc_dataset import create_datasets
+from src.features.mfcc import build_mfcc_extractor
+from src.models.mfcc_cnn import build_model
+from src.training.evaluate_mfcc import evaluate_checkpoint, evaluate_model
+from src.utils.mfcc_utils import load_config, resolve_device, set_seed
 
 
 def train_one_epoch(
@@ -89,7 +89,7 @@ def save_checkpoint(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train the MFCC-CNN speech command baseline.")
-    parser.add_argument("--config", default="configs/configMFCC.yaml")
+    parser.add_argument("--config", default="configs/models/mfcc_cnn.yaml")
     return parser.parse_args()
 
 

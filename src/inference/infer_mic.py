@@ -11,7 +11,7 @@ from src.utils.config import load_config
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Record microphone audio and classify a robot command.")
-    parser.add_argument("--config", default="configs/cnn_gru.yaml")
+    parser.add_argument("--config", default="configs/models/cnn_gru.yaml")
     parser.add_argument("--checkpoint", default=None)
     parser.add_argument("--threshold", type=float, default=None, help="Override the threshold from the config.")
     parser.add_argument("--seconds", type=float, default=1.0)

@@ -1,17 +1,24 @@
 from __future__ import annotations
 
-import base64
 import html
 from io import BytesIO
 from pathlib import Path
+import queue
 import sys
 import wave
 
 import matplotlib.pyplot as plt
+import numpy as np
 import sounddevice as sd
 import streamlit as st
-import streamlit.components.v1 as components
 import torch
+
+# Streamlit's file watcher can accidentally inspect torch.classes as a Python
+# package and emit noisy warnings on some Torch/Windows combinations.
+try:
+    torch.classes.__path__ = type("_TorchClassesPath", (), {"_path": []})()
+except Exception:
+    pass
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
@@ -42,13 +49,34 @@ def get_prediction_results() -> list[dict[str, object]]:
 
 
 def record_microphone(sample_rate: int, seconds: float) -> torch.Tensor:
-    audio = sd.rec(
-        int(seconds * sample_rate),
-        samplerate=sample_rate,
-        channels=1,
-        dtype="float32",
-    )
-    sd.wait()
+    audio_queue: queue.Queue[np.ndarray] = queue.Queue()
+    frames_needed = int(seconds * sample_rate)
+    collected_frames = 0
+    chunks: list[np.ndarray] = []
+
+    def callback(indata, frames, time, status) -> None:
+        if status:
+            print(status)
+        audio_queue.put(indata.copy())
+
+    try:
+        with sd.InputStream(
+            samplerate=sample_rate,
+            channels=1,
+            dtype="float32",
+            callback=callback,
+        ):
+            while collected_frames < frames_needed:
+                chunk = audio_queue.get(timeout=seconds + 1.0)
+                chunks.append(chunk)
+                collected_frames += chunk.shape[0]
+    finally:
+        sd.stop()
+
+    if not chunks:
+        raise RuntimeError("No audio was recorded from the microphone.")
+
+    audio = np.concatenate(chunks, axis=0)[:frames_needed]
     return torch.from_numpy(audio.T.copy())
 
 
@@ -62,11 +90,6 @@ def waveform_to_wav_bytes(waveform: torch.Tensor, sample_rate: int) -> bytes:
         wav_file.setframerate(sample_rate)
         wav_file.writeframes(pcm)
     return buffer.getvalue()
-
-
-def audio_to_data_uri(audio_bytes: bytes) -> str:
-    encoded = base64.b64encode(audio_bytes).decode("ascii")
-    return f"data:audio/wav;base64,{encoded}"
 
 
 def plot_waveform(waveform, sample_rate: int):
@@ -92,14 +115,6 @@ def plot_logmel(logmel):
     return fig
 
 
-def figure_to_data_uri(fig) -> str:
-    buffer = BytesIO()
-    fig.savefig(buffer, format="png", dpi=120, bbox_inches="tight")
-    plt.close(fig)
-    encoded = base64.b64encode(buffer.getvalue()).decode("ascii")
-    return f"data:image/png;base64,{encoded}"
-
-
 def build_export_html(rows: list[dict[str, object]]) -> str:
     table_rows = []
     for row in rows:
@@ -114,9 +129,6 @@ def build_export_html(rows: list[dict[str, object]]) -> str:
             f"<td>{html.escape(str(row['Direction']))}</td>"
             f"<td>{html.escape(str(row.get('Status', '')))}</td>"
             f"<td>{html.escape(str(row.get('Reason', '')))}</td>"
-            f"<td><audio controls src=\"{row.get('AudioData', '')}\"></audio></td>"
-            f"<td><img src=\"{row['Waveform']}\" alt=\"Waveform\"/></td>"
-            f"<td><img src=\"{row['Log-Mel']}\" alt=\"Log-Mel spectrogram\"/></td>"
             "</tr>"
         )
 
@@ -147,75 +159,12 @@ def build_export_html(rows: list[dict[str, object]]) -> str:
         <th>Direction</th>
         <th>Status</th>
         <th>Reason</th>
-        <th>Audio</th>
-        <th>Waveform</th>
-        <th>Log-Mel</th>
       </tr>
     </thead>
     <tbody>
       {''.join(table_rows)}
     </tbody>
   </table>
-</body>
-</html>
-"""
-
-
-def build_results_table_html(rows: list[dict[str, object]]) -> str:
-    table_rows = []
-    for row in rows:
-        table_rows.append(
-            "<tr>"
-            f"<td>{html.escape(str(row['Step']))}</td>"
-            f"<td>{html.escape(str(row['Command']))}</td>"
-            f"<td>{html.escape(str(row['Raw command']))}</td>"
-            f"<td>{html.escape(str(row['Confidence']))}</td>"
-            f"<td>{html.escape(str(row['Action']))}</td>"
-            f"<td>{html.escape(str(row['Position']))}</td>"
-            f"<td>{html.escape(str(row['Direction']))}</td>"
-            f"<td>{html.escape(str(row.get('Status', '')))}</td>"
-            f"<td>{html.escape(str(row.get('Reason', '')))}</td>"
-            f"<td><audio controls preload=\"metadata\" src=\"{row.get('AudioData', '')}\"></audio></td>"
-            "</tr>"
-        )
-
-    return f"""<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8"/>
-  <style>
-    body {{ margin: 0; font-family: Arial, sans-serif; color: #f9fafb; background: transparent; }}
-    .table-wrap {{ overflow-x: auto; border: 1px solid #374151; border-radius: 8px; }}
-    table {{ border-collapse: collapse; width: 100%; min-width: 980px; font-size: 14px; }}
-    th, td {{ border-bottom: 1px solid #374151; padding: 10px 12px; text-align: left; vertical-align: middle; }}
-    th {{ background: #111827; color: #dbeafe; font-weight: 700; position: sticky; top: 0; }}
-    tr:nth-child(even) {{ background: rgba(31, 41, 55, 0.55); }}
-    tr:nth-child(odd) {{ background: rgba(17, 24, 39, 0.55); }}
-    audio {{ width: 190px; height: 34px; }}
-  </style>
-</head>
-<body>
-  <div class="table-wrap">
-    <table>
-      <thead>
-        <tr>
-          <th>Step</th>
-          <th>Command</th>
-          <th>Raw command</th>
-          <th>Confidence</th>
-          <th>Action</th>
-          <th>Position</th>
-          <th>Direction</th>
-          <th>Status</th>
-          <th>Reason</th>
-          <th>Audio</th>
-        </tr>
-      </thead>
-      <tbody>
-        {''.join(table_rows)}
-      </tbody>
-    </table>
-  </div>
 </body>
 </html>
 """
@@ -232,15 +181,50 @@ def safety_status_label(status: str) -> str:
     return labels.get(status, status.upper())
 
 
+def get_system_state(require_wake_word: bool) -> dict[str, object]:
+    if "system_state" not in st.session_state:
+        st.session_state.system_state = "IDLE"
+    if "wake_word_detected" not in st.session_state:
+        st.session_state.wake_word_detected = False
+
+    state = str(st.session_state.system_state)
+    wake_word_detected = bool(st.session_state.wake_word_detected)
+    listening = state == "LISTENING" if require_wake_word else True
+    return {
+        "state": state,
+        "wake_word_detected": wake_word_detected,
+        "listening": listening,
+    }
+
+
+def reset_system_state() -> None:
+    st.session_state.system_state = "IDLE"
+    st.session_state.wake_word_detected = False
+
+
 def main() -> None:
     st.set_page_config(page_title="Speech Command Wheelchair Demo", layout="wide")
     st.title("Speech Command Wheelchair Demo")
 
     with st.sidebar:
-        config_path = st.text_input("Config", value="configs/cnn_gru.yaml")
+        st.subheader("Model")
+        config_path = st.text_input("Config", value="configs/models/cnn_gru.yaml")
         config = load_config(config_path)
         safety_cfg = config.get("safety", {})
         checkpoint_path = st.text_input("Checkpoint", value=config["training"]["checkpoint_path"])
+        device = st.selectbox("Device", ["auto", "cpu", "cuda"], index=0)
+
+        st.subheader("Recording")
+        record_seconds = st.number_input(
+            "Command record seconds",
+            min_value=0.25,
+            max_value=3.0,
+            value=2.0,
+            step=0.25,
+            key="command_record_seconds_v2",
+        )
+
+        st.subheader("Safety")
         configured_threshold = float(
             safety_cfg.get(
                 "confidence_threshold",
@@ -249,19 +233,17 @@ def main() -> None:
         )
         default_threshold = configured_threshold if configured_threshold > 0.0 else 0.70
         threshold = st.slider("Confidence threshold", 0.0, 1.0, default_threshold, 0.01)
-        record_seconds = st.number_input("Record seconds", min_value=0.25, max_value=3.0, value=1.0, step=0.25)
         require_wake_word = st.checkbox(
             "Require wake word",
             value=bool(safety_cfg.get("require_wake_word", False)),
         )
-        wake_word_detected = st.checkbox("Wake word detected", value=True)
-        listening = st.checkbox("Listening", value=True)
         command_timeout = st.number_input(
             "Command timeout (s)",
             min_value=0.5,
             max_value=10.0,
-            value=float(safety_cfg.get("command_timeout_seconds") or 3.0),
+            value=float(safety_cfg.get("command_timeout_seconds") or 2.0),
             step=0.5,
+            key="command_timeout_seconds_v2",
         )
         stop_threshold = st.slider(
             "Stop confidence threshold",
@@ -270,7 +252,20 @@ def main() -> None:
             float(safety_cfg.get("stop_confidence_threshold", 0.0)),
             0.01,
         )
-        device = st.selectbox("Device", ["auto", "cpu", "cuda"], index=0)
+
+        system_state = get_system_state(require_wake_word)
+        wake_word_detected = bool(system_state["wake_word_detected"])
+        listening = bool(system_state["listening"])
+
+        st.subheader("System state")
+        st.metric("State", str(system_state["state"]) if require_wake_word else "COMMAND_ONLY")
+        wake_word_display = (
+            "DETECTED"
+            if wake_word_detected
+            else ("NOT DETECTED" if require_wake_word else "NOT REQUIRED")
+        )
+        st.metric("Wake word", wake_word_display)
+        st.metric("Listening", "YES" if listening else "NO")
         reset_clicked = st.button("Reset simulator")
 
     simulator = get_robot_simulator()
@@ -279,6 +274,7 @@ def main() -> None:
 
     if reset_clicked:
         simulator.reset()
+        reset_system_state()
         prediction_results.clear()
 
     result = None
@@ -321,9 +317,6 @@ def main() -> None:
                     elapsed_since_wake_seconds=float(record_seconds),
                 )
                 applied_event = simulator.apply_decision(safety_decision)
-                waveform_image = figure_to_data_uri(plot_waveform(waveform, sample_rate))
-                logmel_image = figure_to_data_uri(plot_logmel(logmel))
-                audio_label = f"Recording {applied_event['step']}"
                 prediction_results.append(
                     {
                         "Step": applied_event["step"],
@@ -335,10 +328,6 @@ def main() -> None:
                         "Direction": applied_event["direction"],
                         "Status": applied_event["status"],
                         "Reason": applied_event["reason"],
-                        "Audio": audio_label,
-                        "AudioData": audio_to_data_uri(audio_bytes),
-                        "Waveform": waveform_image,
-                        "Log-Mel": logmel_image,
                     }
                 )
             except Exception as error:
@@ -348,7 +337,9 @@ def main() -> None:
 
     map_col, state_col = st.columns([1.35, 1.0])
     with map_col:
-        st.pyplot(simulator.render(), clear_figure=True)
+        map_figure = simulator.render()
+        st.pyplot(map_figure, clear_figure=True)
+        plt.close(map_figure)
     with state_col:
         state = simulator.state
         state_metric_1, state_metric_2 = st.columns(2)
@@ -380,7 +371,7 @@ def main() -> None:
                 st.dataframe(
                     [
                         {"Rule": "Wake word required", "Value": str(require_wake_word)},
-                        {"Rule": "Wake word detected", "Value": str(wake_word_detected)},
+                        {"Rule": "Wake word detected", "Value": wake_word_display},
                         {"Rule": "Listening state", "Value": str(listening)},
                         {"Rule": "Command timeout", "Value": f"{command_timeout:.1f}s"},
                         {"Rule": "Confidence threshold", "Value": f"{threshold:.2f}"},
@@ -406,26 +397,17 @@ def main() -> None:
             st.audio(audio_bytes, format="audio/wav")
         left_col, right_col = st.columns(2)
         with left_col:
-            st.pyplot(plot_waveform(waveform, data_cfg["sample_rate"]), clear_figure=True)
+            waveform_figure = plot_waveform(waveform, data_cfg["sample_rate"])
+            st.pyplot(waveform_figure, clear_figure=True)
+            plt.close(waveform_figure)
         with right_col:
-            st.pyplot(plot_logmel(logmel), clear_figure=True)
+            logmel_figure = plot_logmel(logmel)
+            st.pyplot(logmel_figure, clear_figure=True)
+            plt.close(logmel_figure)
 
     if prediction_results:
         st.subheader("Export results")
-        table_height = min(560, 96 + len(prediction_results) * 58)
-        components.html(build_results_table_html(prediction_results), height=table_height, scrolling=True)
-        st.dataframe(
-            [
-                {key: value for key, value in row.items() if key not in {"AudioData", "Audio"}}
-                for row in prediction_results
-            ],
-            use_container_width=True,
-            hide_index=True,
-            column_config={
-                "Waveform": st.column_config.ImageColumn("Waveform"),
-                "Log-Mel": st.column_config.ImageColumn("Log-Mel"),
-            },
-        )
+        st.dataframe(prediction_results, use_container_width=True, hide_index=True)
         st.download_button(
             "Download HTML report",
             data=build_export_html(prediction_results),
