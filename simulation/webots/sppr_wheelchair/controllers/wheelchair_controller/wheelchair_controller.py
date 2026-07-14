@@ -336,36 +336,44 @@ print("A     : turn left 90 degrees")
 print("D     : turn right 90 degrees")
 print("Space : stop")
 
-while robot.step(timestep) != -1:
-    try:
-        packet, sender_address = udp_socket.recvfrom(1024)
-    except BlockingIOError:
-        pass
-    else:
+try:
+    while robot.step(timestep) != -1:
         try:
-            udp_command = packet.decode("utf-8").strip().upper()
-        except UnicodeDecodeError as error:
-            print(
-                "Warning: ignored UDP packet with invalid UTF-8 "
-                f"from {sender_address}: {error}"
-            )
+            packet, sender_address = udp_socket.recvfrom(1024)
+        except BlockingIOError:
+            pass
         else:
-            if udp_command in VALID_UDP_COMMANDS:
+            try:
+                udp_command = packet.decode("utf-8").strip().upper()
+            except UnicodeDecodeError as error:
                 print(
-                    f"UDP command received from {sender_address}: "
-                    f"{udp_command}"
+                    "Warning: ignored UDP packet with invalid UTF-8 "
+                    f"from {sender_address}: {error}"
                 )
-                handle_udp_command(udp_command)
             else:
-                print(
-                    f"Warning: ignored invalid UDP command "
-                    f"from {sender_address}: {udp_command!r}"
-                )
+                if udp_command in VALID_UDP_COMMANDS:
+                    print(
+                        f"UDP command received from {sender_address}: "
+                        f"{udp_command}"
+                    )
+                    handle_udp_command(udp_command)
+                else:
+                    print(
+                        f"Warning: ignored invalid UDP command "
+                        f"from {sender_address}: {udp_command!r}"
+                    )
 
-    key = keyboard.getKey()
-
-    while key != -1:
-        handle_key(key)
         key = keyboard.getKey()
 
-    update_turn()
+        while key != -1:
+            handle_key(key)
+            key = keyboard.getKey()
+
+        update_turn()
+finally:
+    try:
+        set_motor_speeds(0.0, 0.0)
+    finally:
+        udp_socket.close()
+
+    print("UDP receiver closed and robot stopped")
