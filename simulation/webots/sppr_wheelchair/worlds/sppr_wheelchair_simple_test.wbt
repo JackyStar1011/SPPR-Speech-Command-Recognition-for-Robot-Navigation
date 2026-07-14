@@ -6,6 +6,16 @@ EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/project
 EXTERNPROTO "../protos/SimpleWheelchair.proto"
 
 WorldInfo {
+  contactProperties [
+    ContactProperties {
+      material1 "wheelchair wheel"
+      material2 "default"
+      coulombFriction [
+        0.8
+      ]
+      bounce 0
+    }
+  ]
 }
 Viewpoint {
   orientation 0.33328216876701916 0.35283920747958936 -0.8743154405860208 1.578748112051459

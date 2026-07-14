@@ -223,6 +223,7 @@ PROTO SimpleWheelchair [
             }
           ]
           name "left rear wheel"
+          contactMaterial "wheelchair wheel"
           boundingObject Cylinder {
             height 0.05
             radius 0.3
@@ -276,6 +277,7 @@ PROTO SimpleWheelchair [
             }
           ]
           name "right rear wheel"
+          contactMaterial "wheelchair wheel"
           boundingObject Cylinder {
             height 0.05
             radius 0.3
@@ -297,6 +299,13 @@ PROTO SimpleWheelchair [
     }
     physics Physics {
       mass 45
+      centerOfMass [
+        0 0 0.27
+      ]
+      damping Damping {
+        linear 0.05
+        angular 0.1
+      }
     }
   }
 }
