@@ -241,3 +241,7 @@ data/my_voice_test/**/*.wav
 
 # Generated script caches (source scripts are versioned)
 scripts/__pycache__/
+
+# Reports
+Final-term report/
+Mid-term report/
