@@ -1,0 +1,24 @@
+#VRML_SIM R2025a utf8
+
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/backgrounds/protos/TexturedBackground.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/backgrounds/protos/TexturedBackgroundLight.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/floors/protos/RectangleArena.proto"
+EXTERNPROTO "../protos/SimpleWheelchair.proto"
+
+WorldInfo {
+}
+Viewpoint {
+  orientation 0.33328216876701916 0.35283920747958936 -0.8743154405860208 1.578748112051459
+  position -0.7321370709146929 7.406877603720938 6.478153326162856
+}
+TexturedBackground {
+}
+TexturedBackgroundLight {
+}
+RectangleArena {
+  floorSize 5 5
+}
+SimpleWheelchair {
+  translation 0 0 0
+  controller "wheelchair_controller"
+}
