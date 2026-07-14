@@ -65,6 +65,118 @@ PROTO SimpleWheelchair [
           }
         ]
       }
+      # Armrests
+      Pose {
+        translation -0.02 0.25 0.62
+        children [
+          Shape {
+            appearance PBRAppearance {
+              baseColor 0.12 0.16 0.22
+              roughness 0.6
+              metalness 0.1
+            }
+            geometry Box {
+              size 0.34 0.04 0.05
+            }
+          }
+        ]
+      }
+      Pose {
+        translation -0.02 -0.25 0.62
+        children [
+          Shape {
+            appearance PBRAppearance {
+              baseColor 0.12 0.16 0.22
+              roughness 0.6
+              metalness 0.1
+            }
+            geometry Box {
+              size 0.34 0.04 0.05
+            }
+          }
+        ]
+      }
+      # Footrest
+      Pose {
+        translation 0.35 0 0.24
+        children [
+          Shape {
+            appearance PBRAppearance {
+              baseColor 0.18 0.2 0.24
+              roughness 0.65
+              metalness 0.25
+            }
+            geometry Box {
+              size 0.18 0.36 0.035
+            }
+          }
+        ]
+      }
+      # Visual-only front caster supports and wheels
+      Pose {
+        translation 0.25 0.19 0.2
+        children [
+          Shape {
+            appearance PBRAppearance {
+              baseColor 0.18 0.2 0.24
+              roughness 0.65
+              metalness 0.25
+            }
+            geometry Box {
+              size 0.04 0.04 0.12
+            }
+          }
+        ]
+      }
+      Pose {
+        translation 0.25 -0.19 0.2
+        children [
+          Shape {
+            appearance PBRAppearance {
+              baseColor 0.18 0.2 0.24
+              roughness 0.65
+              metalness 0.25
+            }
+            geometry Box {
+              size 0.04 0.04 0.12
+            }
+          }
+        ]
+      }
+      Pose {
+        translation 0.25 0.19 0.085
+        rotation 1 0 0 1.570796
+        children [
+          Shape {
+            appearance PBRAppearance {
+              baseColor 0.04 0.04 0.04
+              roughness 0.9
+            }
+            geometry Cylinder {
+              height 0.035
+              radius 0.075
+              subdivision 24
+            }
+          }
+        ]
+      }
+      Pose {
+        translation 0.25 -0.19 0.085
+        rotation 1 0 0 1.570796
+        children [
+          Shape {
+            appearance PBRAppearance {
+              baseColor 0.04 0.04 0.04
+              roughness 0.9
+            }
+            geometry Cylinder {
+              height 0.035
+              radius 0.075
+              subdivision 24
+            }
+          }
+        ]
+      }
       InertialUnit {
         name "inertial unit"
       }
@@ -95,6 +207,18 @@ PROTO SimpleWheelchair [
                 height 0.05
                 radius 0.3
                 subdivision 32
+              }
+            }
+            Shape {
+              appearance PBRAppearance {
+                baseColor 0.55 0.58 0.62
+                roughness 0.35
+                metalness 0.65
+              }
+              geometry Cylinder {
+                height 0.056
+                radius 0.095
+                subdivision 24
               }
             }
           ]
@@ -136,6 +260,18 @@ PROTO SimpleWheelchair [
                 height 0.05
                 radius 0.3
                 subdivision 32
+              }
+            }
+            Shape {
+              appearance PBRAppearance {
+                baseColor 0.55 0.58 0.62
+                roughness 0.35
+                metalness 0.65
+              }
+              geometry Cylinder {
+                height 0.056
+                radius 0.095
+                subdivision 24
               }
             }
           ]
