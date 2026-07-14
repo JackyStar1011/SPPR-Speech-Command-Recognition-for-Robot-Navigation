@@ -1,0 +1,166 @@
+#VRML_SIM R2025a utf8
+
+PROTO SimpleWheelchair [
+  field SFVec3f    translation     0 0 0
+  field SFRotation rotation        0 0 1 0
+  field SFString   name            "Simple Wheelchair"
+  field SFString   controller      "wheelchair_controller"
+  field MFString   controllerArgs  []
+  field SFBool     supervisor      FALSE
+  field SFBool     synchronization TRUE
+]
+{
+  Robot {
+    translation IS translation
+    rotation IS rotation
+    name IS name
+    controller IS controller
+    controllerArgs IS controllerArgs
+    supervisor IS supervisor
+    synchronization IS synchronization
+    children [
+      # Chassis
+      Pose {
+        translation 0 0 0.32
+        children [
+          Shape {
+            appearance PBRAppearance {
+              baseColor 0.12 0.16 0.22
+              roughness 0.55
+              metalness 0.15
+            }
+            geometry Box {
+              size 0.62 0.46 0.12
+            }
+          }
+        ]
+      }
+      # Seat
+      Pose {
+        translation 0 0 0.41
+        children [
+          Shape {
+            appearance PBRAppearance {
+              baseColor 0.08 0.22 0.42
+              roughness 0.8
+            }
+            geometry Box {
+              size 0.44 0.44 0.06
+            }
+          }
+        ]
+      }
+      # Backrest
+      Pose {
+        translation -0.22 0 0.65
+        children [
+          Shape {
+            appearance PBRAppearance {
+              baseColor 0.08 0.22 0.42
+              roughness 0.8
+            }
+            geometry Box {
+              size 0.06 0.44 0.48
+            }
+          }
+        ]
+      }
+      InertialUnit {
+        name "inertial unit"
+      }
+      # Left powered rear wheel
+      HingeJoint {
+        jointParameters HingeJointParameters {
+          axis 0 1 0
+          anchor 0 0.28 0.31
+          dampingConstant 0.1
+        }
+        device [
+          RotationalMotor {
+            name "left wheel"
+            maxVelocity 8
+            maxTorque 60
+          }
+        ]
+        endPoint Solid {
+          translation 0 0.28 0.31
+          rotation 1 0 0 1.570796
+          children [
+            Shape {
+              appearance PBRAppearance {
+                baseColor 0.03 0.03 0.03
+                roughness 0.9
+              }
+              geometry Cylinder {
+                height 0.05
+                radius 0.3
+                subdivision 32
+              }
+            }
+          ]
+          name "left rear wheel"
+          boundingObject Cylinder {
+            height 0.05
+            radius 0.3
+            subdivision 24
+          }
+          physics Physics {
+            mass 2
+          }
+        }
+      }
+      # Right powered rear wheel
+      HingeJoint {
+        jointParameters HingeJointParameters {
+          axis 0 1 0
+          anchor 0 -0.28 0.31
+          dampingConstant 0.1
+        }
+        device [
+          RotationalMotor {
+            name "right wheel"
+            maxVelocity 8
+            maxTorque 60
+          }
+        ]
+        endPoint Solid {
+          translation 0 -0.28 0.31
+          rotation 1 0 0 1.570796
+          children [
+            Shape {
+              appearance PBRAppearance {
+                baseColor 0.03 0.03 0.03
+                roughness 0.9
+              }
+              geometry Cylinder {
+                height 0.05
+                radius 0.3
+                subdivision 32
+              }
+            }
+          ]
+          name "right rear wheel"
+          boundingObject Cylinder {
+            height 0.05
+            radius 0.3
+            subdivision 24
+          }
+          physics Physics {
+            mass 2
+          }
+        }
+      }
+    ]
+    boundingObject Pose {
+      translation 0 0 0.32
+      children [
+        Box {
+          size 0.62 0.46 0.12
+        }
+      ]
+    }
+    physics Physics {
+      mass 45
+    }
+  }
+}
