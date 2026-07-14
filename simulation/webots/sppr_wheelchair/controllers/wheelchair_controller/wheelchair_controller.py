@@ -309,7 +309,24 @@ def handle_key(key: int) -> None:
 
 
 # =========================================================
-# 9. Main loop
+# 9. Xử lý UDP command
+# =========================================================
+
+def handle_udp_command(command: str) -> None:
+    if command == "MOVE_FORWARD":
+        move_forward()
+    elif command == "MOVE_BACKWARD":
+        move_backward()
+    elif command == "TURN_LEFT":
+        start_turn_left(90.0)
+    elif command == "TURN_RIGHT":
+        start_turn_right(90.0)
+    elif command == "STOP":
+        stop_robot()
+
+
+# =========================================================
+# 10. Main loop
 # =========================================================
 
 print("Keyboard control started")
@@ -338,6 +355,7 @@ while robot.step(timestep) != -1:
                     f"UDP command received from {sender_address}: "
                     f"{udp_command}"
                 )
+                handle_udp_command(udp_command)
             else:
                 print(
                     f"Warning: ignored invalid UDP command "
