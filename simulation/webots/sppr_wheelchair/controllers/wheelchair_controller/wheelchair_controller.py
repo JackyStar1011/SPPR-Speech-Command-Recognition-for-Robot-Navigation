@@ -1,4 +1,5 @@
 import math
+import socket
 
 from controller import Robot
 
@@ -9,6 +10,22 @@ from controller import Robot
 
 robot = Robot()
 timestep = int(robot.getBasicTimeStep())
+
+UDP_HOST = "127.0.0.1"
+UDP_PORT = 5005
+
+udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
+try:
+    udp_socket.bind((UDP_HOST, UDP_PORT))
+except OSError as error:
+    udp_socket.close()
+    raise RuntimeError(
+        f"Failed to bind UDP receiver on {UDP_HOST}:{UDP_PORT}: {error}"
+    ) from error
+
+udp_socket.setblocking(False)
+print(f"UDP receiver initialized on {UDP_HOST}:{UDP_PORT}")
 
 
 # =========================================================
