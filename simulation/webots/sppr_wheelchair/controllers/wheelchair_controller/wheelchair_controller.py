@@ -13,6 +13,13 @@ timestep = int(robot.getBasicTimeStep())
 
 UDP_HOST = "127.0.0.1"
 UDP_PORT = 5005
+VALID_UDP_COMMANDS = {
+    "MOVE_FORWARD",
+    "MOVE_BACKWARD",
+    "TURN_LEFT",
+    "TURN_RIGHT",
+    "STOP",
+}
 
 udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
@@ -313,6 +320,30 @@ print("D     : turn right 90 degrees")
 print("Space : stop")
 
 while robot.step(timestep) != -1:
+    try:
+        packet, sender_address = udp_socket.recvfrom(1024)
+    except BlockingIOError:
+        pass
+    else:
+        try:
+            udp_command = packet.decode("utf-8").strip().upper()
+        except UnicodeDecodeError as error:
+            print(
+                "Warning: ignored UDP packet with invalid UTF-8 "
+                f"from {sender_address}: {error}"
+            )
+        else:
+            if udp_command in VALID_UDP_COMMANDS:
+                print(
+                    f"UDP command received from {sender_address}: "
+                    f"{udp_command}"
+                )
+            else:
+                print(
+                    f"Warning: ignored invalid UDP command "
+                    f"from {sender_address}: {udp_command!r}"
+                )
+
     key = keyboard.getKey()
 
     while key != -1:
