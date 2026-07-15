@@ -2,14 +2,14 @@
 
 import argparse
 
-from src.inference.predictorMFCC import MFCCSpeechCommandPredictor
-from src.utils.utilsMFCC import load_config
+from src.inference.mfcc_predictor import MFCCSpeechCommandPredictor
+from src.utils.mfcc_utils import load_config
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Predict a robot navigation command with the MFCC-CNN model.")
     parser.add_argument("--file", required=True, help="Path to a WAV file.")
-    parser.add_argument("--config", default="configs/configMFCC.yaml")
+    parser.add_argument("--config", default="configs/models/mfcc_cnn.yaml")
     parser.add_argument("--checkpoint", default=None)
     parser.add_argument("--threshold", type=float, default=0.70)
     parser.add_argument("--device", default="auto")

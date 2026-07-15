@@ -8,10 +8,10 @@ from torch import nn
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from src.data.datasetMFCC import create_dataset
-from src.features.featuresMFCC import build_mfcc_extractor
-from src.models.modelMFCC import build_model
-from src.utils.utilsMFCC import (
+from src.data.mfcc_dataset import create_dataset
+from src.features.mfcc import build_mfcc_extractor
+from src.models.mfcc_cnn import build_model
+from src.utils.mfcc_utils import (
     compute_classification_metrics,
     load_config,
     resolve_device,
@@ -94,7 +94,7 @@ def evaluate_checkpoint(config: dict, checkpoint_path: str, split: str = "testin
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Evaluate an MFCC-CNN speech command checkpoint.")
-    parser.add_argument("--config", default="configs/configMFCC.yaml")
+    parser.add_argument("--config", default="configs/models/mfcc_cnn.yaml")
     parser.add_argument("--checkpoint", default=None)
     parser.add_argument("--split", default="testing", choices=["training", "validation", "testing"])
     parser.add_argument("--prefix", default="test")

@@ -12,16 +12,23 @@ from src.utils.config import load_config
 from src.utils.seed import resolve_device
 
 
+def load_checkpoint(path: str | Path, device: torch.device) -> dict:
+    try:
+        return torch.load(path, map_location=device, weights_only=True)
+    except TypeError:
+        return torch.load(path, map_location=device)
+
+
 class SpeechCommandPredictor:
     def __init__(
         self,
         checkpoint_path: str,
-        config_path: str = "configs/cnn_gru.yaml",
+        config_path: str = "configs/models/cnn_gru.yaml",
         device_name: str = "auto",
     ) -> None:
         self.config = load_config(config_path)
         self.device = resolve_device(device_name)
-        checkpoint = torch.load(checkpoint_path, map_location=self.device)
+        checkpoint = load_checkpoint(checkpoint_path, self.device)
 
         self.class_names = checkpoint.get(
             "classes",

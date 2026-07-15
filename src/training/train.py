@@ -96,7 +96,7 @@ def save_checkpoint(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train the Speech Command CNN-GRU.")
-    parser.add_argument("--config", default="configs/cnn_gru.yaml")
+    parser.add_argument("--config", default="configs/models/cnn_gru.yaml")
     return parser.parse_args()
 
 

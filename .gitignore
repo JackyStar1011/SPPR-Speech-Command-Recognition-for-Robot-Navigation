@@ -239,6 +239,9 @@ data/my_voice_test/**/*.wav
 *.pt
 !outputs/checkpoints/*.pt
 
-# Local report drafts and helper scripts
-reports/
-scripts/
+# Generated script caches (source scripts are versioned)
+scripts/__pycache__/
+
+# Reports
+Final-term report/
+Mid-term report/
