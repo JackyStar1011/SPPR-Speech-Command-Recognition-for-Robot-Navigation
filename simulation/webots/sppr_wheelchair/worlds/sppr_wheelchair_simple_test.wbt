@@ -8,10 +8,18 @@ EXTERNPROTO "../protos/SimpleWheelchair.proto"
 WorldInfo {
   contactProperties [
     ContactProperties {
-      material1 "wheelchair wheel"
+      material1 "wheelchair rear wheel"
       material2 "default"
       coulombFriction [
         0.8
+      ]
+      bounce 0
+    }
+    ContactProperties {
+      material1 "wheelchair caster wheel"
+      material2 "default"
+      coulombFriction [
+        0.45
       ]
       bounce 0
     }
