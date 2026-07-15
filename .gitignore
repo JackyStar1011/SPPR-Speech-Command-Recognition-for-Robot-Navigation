@@ -242,6 +242,10 @@ data/my_voice_test/**/*.wav
 # Generated script caches (source scripts are versioned)
 scripts/__pycache__/
 
+# Webots-generated world metadata and preview images
+simulation/webots/**/worlds/.*.wbproj
+simulation/webots/**/worlds/.*.jpg
+
 # Reports
 Final-term report/
 Mid-term report/

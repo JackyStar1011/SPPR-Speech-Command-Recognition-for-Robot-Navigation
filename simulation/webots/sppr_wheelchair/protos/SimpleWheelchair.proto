@@ -1,0 +1,606 @@
+#VRML_SIM R2025a utf8
+
+PROTO SimpleWheelchair [
+  field SFVec3f    translation     0 0 0
+  field SFRotation rotation        0 0 1 0
+  field SFString   name            "Simple Wheelchair"
+  field SFString   controller      "wheelchair_controller"
+  field MFString   controllerArgs  []
+  field SFBool     supervisor      FALSE
+  field SFBool     synchronization TRUE
+]
+{
+  Robot {
+    translation IS translation
+    rotation IS rotation
+    name IS name
+    controller IS controller
+    controllerArgs IS controllerArgs
+    supervisor IS supervisor
+    synchronization IS synchronization
+    children [
+      # Chassis
+      Pose {
+        translation 0 0 0.32
+        children [
+          Shape {
+            appearance PBRAppearance {
+              baseColor 0.12 0.16 0.22
+              roughness 0.55
+              metalness 0.15
+            }
+            geometry Box {
+              size 0.62 0.46 0.12
+            }
+          }
+        ]
+      }
+      # Seat
+      Pose {
+        translation 0 0 0.41
+        children [
+          Shape {
+            appearance PBRAppearance {
+              baseColor 0.08 0.22 0.42
+              roughness 0.8
+            }
+            geometry Box {
+              size 0.44 0.44 0.06
+            }
+          }
+        ]
+      }
+      # Backrest
+      Pose {
+        translation -0.22 0 0.65
+        children [
+          Shape {
+            appearance PBRAppearance {
+              baseColor 0.08 0.22 0.42
+              roughness 0.8
+            }
+            geometry Box {
+              size 0.06 0.44 0.48
+            }
+          }
+        ]
+      }
+      # Armrests
+      Pose {
+        translation -0.02 0.25 0.62
+        children [
+          Shape {
+            appearance PBRAppearance {
+              baseColor 0.12 0.16 0.22
+              roughness 0.6
+              metalness 0.1
+            }
+            geometry Box {
+              size 0.34 0.04 0.05
+            }
+          }
+        ]
+      }
+      Pose {
+        translation -0.02 -0.25 0.62
+        children [
+          Shape {
+            appearance PBRAppearance {
+              baseColor 0.12 0.16 0.22
+              roughness 0.6
+              metalness 0.1
+            }
+            geometry Box {
+              size 0.34 0.04 0.05
+            }
+          }
+        ]
+      }
+      # Footrest
+      Pose {
+        translation 0.35 0 0.24
+        children [
+          Shape {
+            appearance PBRAppearance {
+              baseColor 0.18 0.2 0.24
+              roughness 0.65
+              metalness 0.25
+            }
+            geometry Box {
+              size 0.18 0.36 0.035
+            }
+          }
+        ]
+      }
+      # Left passive front caster: swivel joint plus rolling wheel joint
+      HingeJoint {
+        jointParameters HingeJointParameters {
+          axis 0 0 1
+          anchor 0.25 0.19 0.24
+          dampingConstant 0.05
+        }
+        endPoint Solid {
+          translation 0.25 0.19 0.24
+          children [
+            Pose {
+              translation 0 0 -0.02
+              children [
+                Shape {
+                  appearance PBRAppearance {
+                    baseColor 0.18 0.2 0.24
+                    roughness 0.65
+                    metalness 0.25
+                  }
+                  geometry Box {
+                    size 0.035 0.035 0.08
+                  }
+                }
+              ]
+            }
+            Pose {
+              translation -0.015 0 -0.07
+              children [
+                Shape {
+                  appearance PBRAppearance {
+                    baseColor 0.18 0.2 0.24
+                    roughness 0.65
+                    metalness 0.25
+                  }
+                  geometry Box {
+                    size 0.055 0.09 0.025
+                  }
+                }
+              ]
+            }
+            Pose {
+              translation -0.03 0.035 -0.105
+              children [
+                Shape {
+                  appearance PBRAppearance {
+                    baseColor 0.18 0.2 0.24
+                    roughness 0.65
+                    metalness 0.25
+                  }
+                  geometry Box {
+                    size 0.025 0.025 0.12
+                  }
+                }
+              ]
+            }
+            Pose {
+              translation -0.03 -0.035 -0.105
+              children [
+                Shape {
+                  appearance PBRAppearance {
+                    baseColor 0.18 0.2 0.24
+                    roughness 0.65
+                    metalness 0.25
+                  }
+                  geometry Box {
+                    size 0.025 0.025 0.12
+                  }
+                }
+              ]
+            }
+            HingeJoint {
+              jointParameters HingeJointParameters {
+                axis 0 1 0
+                anchor -0.03 0 -0.155
+                dampingConstant 0.01
+              }
+              endPoint Solid {
+                translation -0.03 0 -0.155
+                rotation 1 0 0 1.570796
+                children [
+                  Shape {
+                    appearance PBRAppearance {
+                      baseColor 0.04 0.04 0.04
+                      roughness 0.9
+                    }
+                    geometry Cylinder {
+                      height 0.035
+                      radius 0.075
+                      subdivision 24
+                    }
+                  }
+                  Shape {
+                    appearance PBRAppearance {
+                      baseColor 0.55 0.58 0.62
+                      roughness 0.35
+                      metalness 0.65
+                    }
+                    geometry Cylinder {
+                      height 0.039
+                      radius 0.025
+                      subdivision 20
+                    }
+                  }
+                ]
+                name "left front caster wheel"
+                contactMaterial "wheelchair caster wheel"
+                boundingObject Cylinder {
+                  height 0.035
+                  radius 0.075
+                  subdivision 20
+                }
+                physics Physics {
+                  mass 0.3
+                  damping Damping {
+                    linear 0.01
+                    angular 0.01
+                  }
+                }
+              }
+            }
+          ]
+          name "left caster fork"
+          boundingObject Group {
+            children [
+              Pose {
+                translation 0 0 -0.02
+                children [
+                  Box {
+                    size 0.035 0.035 0.08
+                  }
+                ]
+              }
+              Pose {
+                translation -0.015 0 -0.07
+                children [
+                  Box {
+                    size 0.055 0.09 0.025
+                  }
+                ]
+              }
+              Pose {
+                translation -0.03 0.035 -0.105
+                children [
+                  Box {
+                    size 0.025 0.025 0.12
+                  }
+                ]
+              }
+              Pose {
+                translation -0.03 -0.035 -0.105
+                children [
+                  Box {
+                    size 0.025 0.025 0.12
+                  }
+                ]
+              }
+            ]
+          }
+          physics Physics {
+            mass 0.25
+            centerOfMass [
+              -0.02 0 -0.08
+            ]
+          }
+        }
+      }
+      # Right passive front caster: swivel joint plus rolling wheel joint
+      HingeJoint {
+        jointParameters HingeJointParameters {
+          axis 0 0 1
+          anchor 0.25 -0.19 0.24
+          dampingConstant 0.05
+        }
+        endPoint Solid {
+          translation 0.25 -0.19 0.24
+          children [
+            Pose {
+              translation 0 0 -0.02
+              children [
+                Shape {
+                  appearance PBRAppearance {
+                    baseColor 0.18 0.2 0.24
+                    roughness 0.65
+                    metalness 0.25
+                  }
+                  geometry Box {
+                    size 0.035 0.035 0.08
+                  }
+                }
+              ]
+            }
+            Pose {
+              translation -0.015 0 -0.07
+              children [
+                Shape {
+                  appearance PBRAppearance {
+                    baseColor 0.18 0.2 0.24
+                    roughness 0.65
+                    metalness 0.25
+                  }
+                  geometry Box {
+                    size 0.055 0.09 0.025
+                  }
+                }
+              ]
+            }
+            Pose {
+              translation -0.03 0.035 -0.105
+              children [
+                Shape {
+                  appearance PBRAppearance {
+                    baseColor 0.18 0.2 0.24
+                    roughness 0.65
+                    metalness 0.25
+                  }
+                  geometry Box {
+                    size 0.025 0.025 0.12
+                  }
+                }
+              ]
+            }
+            Pose {
+              translation -0.03 -0.035 -0.105
+              children [
+                Shape {
+                  appearance PBRAppearance {
+                    baseColor 0.18 0.2 0.24
+                    roughness 0.65
+                    metalness 0.25
+                  }
+                  geometry Box {
+                    size 0.025 0.025 0.12
+                  }
+                }
+              ]
+            }
+            HingeJoint {
+              jointParameters HingeJointParameters {
+                axis 0 1 0
+                anchor -0.03 0 -0.155
+                dampingConstant 0.01
+              }
+              endPoint Solid {
+                translation -0.03 0 -0.155
+                rotation 1 0 0 1.570796
+                children [
+                  Shape {
+                    appearance PBRAppearance {
+                      baseColor 0.04 0.04 0.04
+                      roughness 0.9
+                    }
+                    geometry Cylinder {
+                      height 0.035
+                      radius 0.075
+                      subdivision 24
+                    }
+                  }
+                  Shape {
+                    appearance PBRAppearance {
+                      baseColor 0.55 0.58 0.62
+                      roughness 0.35
+                      metalness 0.65
+                    }
+                    geometry Cylinder {
+                      height 0.039
+                      radius 0.025
+                      subdivision 20
+                    }
+                  }
+                ]
+                name "right front caster wheel"
+                contactMaterial "wheelchair caster wheel"
+                boundingObject Cylinder {
+                  height 0.035
+                  radius 0.075
+                  subdivision 20
+                }
+                physics Physics {
+                  mass 0.3
+                  damping Damping {
+                    linear 0.01
+                    angular 0.01
+                  }
+                }
+              }
+            }
+          ]
+          name "right caster fork"
+          boundingObject Group {
+            children [
+              Pose {
+                translation 0 0 -0.02
+                children [
+                  Box {
+                    size 0.035 0.035 0.08
+                  }
+                ]
+              }
+              Pose {
+                translation -0.015 0 -0.07
+                children [
+                  Box {
+                    size 0.055 0.09 0.025
+                  }
+                ]
+              }
+              Pose {
+                translation -0.03 0.035 -0.105
+                children [
+                  Box {
+                    size 0.025 0.025 0.12
+                  }
+                ]
+              }
+              Pose {
+                translation -0.03 -0.035 -0.105
+                children [
+                  Box {
+                    size 0.025 0.025 0.12
+                  }
+                ]
+              }
+            ]
+          }
+          physics Physics {
+            mass 0.25
+            centerOfMass [
+              -0.02 0 -0.08
+            ]
+          }
+        }
+      }
+      InertialUnit {
+        name "inertial unit"
+      }
+      # Left powered rear wheel
+      HingeJoint {
+        jointParameters HingeJointParameters {
+          axis 0 1 0
+          anchor -0.22 0.28 0.26
+          dampingConstant 0.1
+        }
+        device [
+          RotationalMotor {
+            name "left wheel"
+            maxVelocity 8
+            maxTorque 60
+          }
+        ]
+        endPoint Solid {
+          translation -0.22 0.28 0.26
+          rotation 1 0 0 1.570796
+          children [
+            Shape {
+              appearance PBRAppearance {
+                baseColor 0.03 0.03 0.03
+                roughness 0.9
+              }
+              geometry Cylinder {
+                height 0.05
+                radius 0.25
+                subdivision 32
+              }
+            }
+            Shape {
+              appearance PBRAppearance {
+                baseColor 0.55 0.58 0.62
+                roughness 0.35
+                metalness 0.65
+              }
+              geometry Cylinder {
+                height 0.056
+                radius 0.079
+                subdivision 24
+              }
+            }
+          ]
+          name "left rear wheel"
+          contactMaterial "wheelchair rear wheel"
+          boundingObject Cylinder {
+            height 0.05
+            radius 0.25
+            subdivision 24
+          }
+          physics Physics {
+            mass 2
+          }
+        }
+      }
+      # Right powered rear wheel
+      HingeJoint {
+        jointParameters HingeJointParameters {
+          axis 0 1 0
+          anchor -0.22 -0.28 0.26
+          dampingConstant 0.1
+        }
+        device [
+          RotationalMotor {
+            name "right wheel"
+            maxVelocity 8
+            maxTorque 60
+          }
+        ]
+        endPoint Solid {
+          translation -0.22 -0.28 0.26
+          rotation 1 0 0 1.570796
+          children [
+            Shape {
+              appearance PBRAppearance {
+                baseColor 0.03 0.03 0.03
+                roughness 0.9
+              }
+              geometry Cylinder {
+                height 0.05
+                radius 0.25
+                subdivision 32
+              }
+            }
+            Shape {
+              appearance PBRAppearance {
+                baseColor 0.55 0.58 0.62
+                roughness 0.35
+                metalness 0.65
+              }
+              geometry Cylinder {
+                height 0.056
+                radius 0.079
+                subdivision 24
+              }
+            }
+          ]
+          name "right rear wheel"
+          contactMaterial "wheelchair rear wheel"
+          boundingObject Cylinder {
+            height 0.05
+            radius 0.25
+            subdivision 24
+          }
+          physics Physics {
+            mass 2
+          }
+        }
+      }
+    ]
+    boundingObject Group {
+      children [
+        Pose {
+          translation 0 0 0.32
+          children [
+            Box {
+              size 0.62 0.46 0.12
+            }
+          ]
+        }
+        Pose {
+          translation 0 0 0.41
+          children [
+            Box {
+              size 0.44 0.44 0.06
+            }
+          ]
+        }
+        Pose {
+          translation -0.22 0 0.65
+          children [
+            Box {
+              size 0.06 0.44 0.48
+            }
+          ]
+        }
+        Pose {
+          translation 0.35 0 0.24
+          children [
+            Box {
+              size 0.18 0.36 0.035
+            }
+          ]
+        }
+      ]
+    }
+    physics Physics {
+      mass 45
+      centerOfMass [
+        -0.04 0 0.29
+      ]
+      damping Damping {
+        linear 0.05
+        angular 0.1
+      }
+    }
+  }
+}
