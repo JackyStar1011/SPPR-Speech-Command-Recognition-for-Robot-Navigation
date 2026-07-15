@@ -5,6 +5,8 @@ from src.models.cnn_gru import SpeechCommandCNNGRU
 from src.models.cnn_gru import build_model as build_cnn_gru_model
 from src.models.bc_resnet import SpeechCommandBCResNet
 from src.models.bc_resnet import build_model as build_bc_resnet_model
+from src.models.bc_resnet_official import SpeechCommandBCResNet15
+from src.models.bc_resnet_official import build_model as build_bc_resnet_1_5_model
 from src.models.tc_resnet import SpeechCommandTCResNet
 from src.models.tc_resnet import build_model as build_tc_resnet_model
 
@@ -13,6 +15,7 @@ __all__ = [
     "SpeechCommandCNNGRU",
     "SpeechCommandTCResNet",
     "SpeechCommandBCResNet",
+    "SpeechCommandBCResNet15",
     "build_model",
 ]
 
@@ -27,4 +30,6 @@ def build_model(config: dict, num_classes: int):
         return build_tc_resnet_model(config, num_classes)
     if model_type == "bc_resnet":
         return build_bc_resnet_model(config, num_classes)
+    if model_type == "bc_resnet_1_5":
+        return build_bc_resnet_1_5_model(config, num_classes)
     raise ValueError(f"Unsupported model type: {model_type}")
