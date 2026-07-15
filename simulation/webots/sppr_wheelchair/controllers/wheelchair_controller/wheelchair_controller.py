@@ -1,4 +1,5 @@
 import math
+import socket
 
 from controller import Robot
 
@@ -9,6 +10,29 @@ from controller import Robot
 
 robot = Robot()
 timestep = int(robot.getBasicTimeStep())
+
+UDP_HOST = "127.0.0.1"
+UDP_PORT = 5005
+VALID_UDP_COMMANDS = {
+    "MOVE_FORWARD",
+    "MOVE_BACKWARD",
+    "TURN_LEFT",
+    "TURN_RIGHT",
+    "STOP",
+}
+
+udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
+try:
+    udp_socket.bind((UDP_HOST, UDP_PORT))
+except OSError as error:
+    udp_socket.close()
+    raise RuntimeError(
+        f"Failed to bind UDP receiver on {UDP_HOST}:{UDP_PORT}: {error}"
+    ) from error
+
+udp_socket.setblocking(False)
+print(f"UDP receiver initialized on {UDP_HOST}:{UDP_PORT}")
 
 
 # =========================================================
@@ -285,7 +309,24 @@ def handle_key(key: int) -> None:
 
 
 # =========================================================
-# 9. Main loop
+# 9. Xử lý UDP command
+# =========================================================
+
+def handle_udp_command(command: str) -> None:
+    if command == "MOVE_FORWARD":
+        move_forward()
+    elif command == "MOVE_BACKWARD":
+        move_backward()
+    elif command == "TURN_LEFT":
+        start_turn_left(90.0)
+    elif command == "TURN_RIGHT":
+        start_turn_right(90.0)
+    elif command == "STOP":
+        stop_robot()
+
+
+# =========================================================
+# 10. Main loop
 # =========================================================
 
 print("Keyboard control started")
@@ -295,11 +336,44 @@ print("A     : turn left 90 degrees")
 print("D     : turn right 90 degrees")
 print("Space : stop")
 
-while robot.step(timestep) != -1:
-    key = keyboard.getKey()
+try:
+    while robot.step(timestep) != -1:
+        try:
+            packet, sender_address = udp_socket.recvfrom(1024)
+        except BlockingIOError:
+            pass
+        else:
+            try:
+                udp_command = packet.decode("utf-8").strip().upper()
+            except UnicodeDecodeError as error:
+                print(
+                    "Warning: ignored UDP packet with invalid UTF-8 "
+                    f"from {sender_address}: {error}"
+                )
+            else:
+                if udp_command in VALID_UDP_COMMANDS:
+                    print(
+                        f"UDP command received from {sender_address}: "
+                        f"{udp_command}"
+                    )
+                    handle_udp_command(udp_command)
+                else:
+                    print(
+                        f"Warning: ignored invalid UDP command "
+                        f"from {sender_address}: {udp_command!r}"
+                    )
 
-    while key != -1:
-        handle_key(key)
         key = keyboard.getKey()
 
-    update_turn()
+        while key != -1:
+            handle_key(key)
+            key = keyboard.getKey()
+
+        update_turn()
+finally:
+    try:
+        set_motor_speeds(0.0, 0.0)
+    finally:
+        udp_socket.close()
+
+    print("UDP receiver closed and robot stopped")

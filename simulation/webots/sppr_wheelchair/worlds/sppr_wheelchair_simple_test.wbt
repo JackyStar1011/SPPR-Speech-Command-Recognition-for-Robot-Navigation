@@ -37,5 +37,6 @@ RectangleArena {
   floorSize 5 5
 }
 SimpleWheelchair {
+  translation 0 0 0
   controller "wheelchair_controller"
 }
