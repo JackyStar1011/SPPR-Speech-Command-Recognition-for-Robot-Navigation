@@ -1,0 +1,78 @@
+seed: 42
+device: auto
+
+data:
+  root: data/raw
+  download: true
+  commands:
+    - forward
+    - backward
+    - left
+    - right
+    - stop
+  unknown_label: unknown
+  unknown_ratio: 1.0
+  sample_rate: 16000
+  duration_seconds: 1.0
+  normalize_waveform: false
+  batch_size: 100
+  num_workers: 2
+
+features:
+  type: natural_log_mel
+  n_fft: 512
+  win_length: 480
+  hop_length: 160
+  n_mels: 40
+  log_epsilon: 0.000001
+
+preprocessing:
+  noise_reduction:
+    enabled: false
+  speech_alignment:
+    enabled: false
+
+# Official-style augmentation for non-silence classes. This project has no
+# dedicated silence class, so the same 0.0-0.1 noise amplitude applies to all
+# five commands and the balanced unknown class.
+augmentation:
+  enabled: true
+  probability: 0.8
+  time_shift_ms: 100.0
+  noise_amplitude_min: 0.0
+  noise_amplitude_max: 0.1
+  # Leave null to discover _background_noise_ from the downloaded GSC dataset.
+  background_noise_dir: null
+  spec_augment:
+    enabled: true
+    frequency_mask_param: 1
+    time_mask_param: 20
+    frequency_mask_count: 2
+    time_mask_count: 2
+
+model:
+  type: bc_resnet_1_5
+  tau: 1.5
+  dropout: 0.1
+
+training:
+  epochs: 200
+  optimizer:
+    type: sgd
+    learning_rate: 0.1
+    momentum: 0.9
+    weight_decay: 0.001
+  scheduler:
+    type: cosine
+    interval: iteration
+    warmup_epochs: 5
+    minimum_learning_rate: 0.0
+  checkpoint_path: outputs/checkpoints/best_bc_resnet_1_5_paper_6classes.pt
+
+inference:
+  threshold: 0.0
+  align_speech: false
+
+outputs:
+  figures_dir: outputs/figures/bc_resnet_1_5_paper_6classes
+  metrics_dir: outputs/metrics/bc_resnet_1_5_paper_6classes

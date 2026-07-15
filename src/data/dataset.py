@@ -5,8 +5,8 @@ from pathlib import Path
 from typing import Literal
 
 import torch
-from torch.utils.data import Dataset
 import torchaudio
+from torch.utils.data import Dataset
 
 from src.data.augmentation import apply_waveform_augmentation
 from src.data.preprocess import (
@@ -30,6 +30,7 @@ class SpeechCommandsRobotDataset(Dataset):
         download: bool = True,
         sample_rate: int = 16000,
         duration_seconds: float = 1.0,
+        normalize_waveform: bool = True,
         seed: int = 42,
         align_speech: bool = False,
         speech_alignment: dict | None = None,
@@ -48,6 +49,7 @@ class SpeechCommandsRobotDataset(Dataset):
         self.class_to_idx = {label: index for index, label in enumerate(self.classes)}
         self.sample_rate = sample_rate
         self.num_samples = int(sample_rate * duration_seconds)
+        self.normalize_waveform = normalize_waveform
         self.align_speech = align_speech
         self.speech_alignment = speech_alignment or {}
         self.apply_noise_reduction = apply_noise_reduction
@@ -102,6 +104,7 @@ class SpeechCommandsRobotDataset(Dataset):
             sample_rate=sample_rate,
             target_sample_rate=self.sample_rate,
             target_num_samples=self.num_samples,
+            normalize=self.normalize_waveform,
             align_speech=self.align_speech,
             speech_alignment=self.speech_alignment,
             apply_noise_reduction=self.apply_noise_reduction,
@@ -131,6 +134,7 @@ def create_dataset(config: dict, split: Split) -> SpeechCommandsRobotDataset:
         download=data_cfg["download"],
         sample_rate=data_cfg["sample_rate"],
         duration_seconds=data_cfg["duration_seconds"],
+        normalize_waveform=bool(data_cfg.get("normalize_waveform", True)),
         seed=config["seed"],
         align_speech=align_speech,
         speech_alignment=speech_alignment,
@@ -140,7 +144,13 @@ def create_dataset(config: dict, split: Split) -> SpeechCommandsRobotDataset:
     )
 
 
-def create_datasets(config: dict) -> tuple[SpeechCommandsRobotDataset, SpeechCommandsRobotDataset, SpeechCommandsRobotDataset]:
+def create_datasets(
+    config: dict,
+) -> tuple[
+    SpeechCommandsRobotDataset,
+    SpeechCommandsRobotDataset,
+    SpeechCommandsRobotDataset,
+]:
     return (
         create_dataset(config, "training"),
         create_dataset(config, "validation"),
