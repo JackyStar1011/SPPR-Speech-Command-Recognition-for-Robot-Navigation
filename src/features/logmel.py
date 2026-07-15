@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import torch
-from torch import nn
 import torchaudio
+from torch import nn
 
 
 class LogMelExtractor(nn.Module):
@@ -37,9 +37,23 @@ class LogMelExtractor(nn.Module):
         return logmel
 
 
-def build_logmel_extractor(config: dict) -> LogMelExtractor:
+def build_logmel_extractor(config: dict) -> nn.Module:
     data_cfg = config["data"]
     feature_cfg = config["features"]
+    feature_type = feature_cfg.get("type", "amplitude_db")
+    if feature_type == "natural_log_mel":
+        from src.features.bc_resnet_recipe import NaturalLogMelExtractor
+
+        return NaturalLogMelExtractor(
+            sample_rate=data_cfg["sample_rate"],
+            n_fft=feature_cfg["n_fft"],
+            win_length=feature_cfg["win_length"],
+            hop_length=feature_cfg["hop_length"],
+            n_mels=feature_cfg["n_mels"],
+            log_epsilon=float(feature_cfg.get("log_epsilon", 1e-6)),
+        )
+    if feature_type != "amplitude_db":
+        raise ValueError(f"Unsupported Log-Mel feature type: {feature_type}")
     return LogMelExtractor(
         sample_rate=data_cfg["sample_rate"],
         n_fft=feature_cfg["n_fft"],

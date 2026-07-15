@@ -64,6 +64,7 @@ class SpeechCommandPredictor:
             sample_rate=sample_rate,
             target_sample_rate=data_cfg["sample_rate"],
             target_num_samples=int(data_cfg["sample_rate"] * data_cfg["duration_seconds"]),
+            normalize=bool(data_cfg.get("normalize_waveform", True)),
             align_speech=self.align_speech,
             speech_alignment=self.speech_alignment,
         ).to(self.device)
@@ -82,7 +83,10 @@ class SpeechCommandPredictor:
             "action": label_to_action(output_label),
         }
 
-    def predict_file(self, file_path: str | Path, threshold: float | None = None) -> dict[str, float | str]:
-        data_cfg = self.config["data"]
+    def predict_file(
+        self,
+        file_path: str | Path,
+        threshold: float | None = None,
+    ) -> dict[str, float | str]:
         waveform, sample_rate = load_waveform(str(file_path))
         return self.predict_waveform(waveform, sample_rate, threshold=threshold)
