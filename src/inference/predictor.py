@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import numpy as np
 import torch
 
 from src.data.preprocess import get_speech_alignment_config, load_waveform, preprocess_waveform
@@ -13,8 +14,14 @@ from src.utils.seed import resolve_device
 
 
 def load_checkpoint(path: str | Path, device: torch.device) -> dict:
+    numpy_safe_globals = [
+        np.core.multiarray.scalar,
+        np.dtype,
+        type(np.dtype(np.float64)),
+    ]
     try:
-        return torch.load(path, map_location=device, weights_only=True)
+        with torch.serialization.safe_globals(numpy_safe_globals):
+            return torch.load(path, map_location=device, weights_only=True)
     except TypeError:
         return torch.load(path, map_location=device)
 
@@ -64,6 +71,7 @@ class SpeechCommandPredictor:
             sample_rate=sample_rate,
             target_sample_rate=data_cfg["sample_rate"],
             target_num_samples=int(data_cfg["sample_rate"] * data_cfg["duration_seconds"]),
+            normalize=bool(data_cfg.get("normalize_waveform", True)),
             align_speech=self.align_speech,
             speech_alignment=self.speech_alignment,
         ).to(self.device)
@@ -82,7 +90,10 @@ class SpeechCommandPredictor:
             "action": label_to_action(output_label),
         }
 
-    def predict_file(self, file_path: str | Path, threshold: float | None = None) -> dict[str, float | str]:
-        data_cfg = self.config["data"]
+    def predict_file(
+        self,
+        file_path: str | Path,
+        threshold: float | None = None,
+    ) -> dict[str, float | str]:
         waveform, sample_rate = load_waveform(str(file_path))
         return self.predict_waveform(waveform, sample_rate, threshold=threshold)

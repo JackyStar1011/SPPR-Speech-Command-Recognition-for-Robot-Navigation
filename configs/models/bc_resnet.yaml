@@ -2,7 +2,7 @@ seed: 42
 device: auto
 
 data:
-  root: data/bc_raw
+  root: data/raw
   download: true
   commands:
     - forward
