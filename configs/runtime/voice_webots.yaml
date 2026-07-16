@@ -1,8 +1,8 @@
 model:
-  config_path: configs/models/cnn_gru.yaml
-  checkpoint_path: outputs/checkpoints/best_cnn_gru.pt
+  config_path: configs/models/bc_resnet_1_5.yaml
+  checkpoint_path: outputs/checkpoints/best_bc_resnet_1_5.pt
   device: auto
-  prediction_threshold: 0.0
+  prediction_threshold: 0.70
 
 wakeword:
   enabled: true

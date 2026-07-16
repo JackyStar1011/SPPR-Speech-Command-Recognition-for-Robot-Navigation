@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import numpy as np
 import torch
 
 from src.data.preprocess import get_speech_alignment_config, load_waveform, preprocess_waveform
@@ -13,8 +14,14 @@ from src.utils.seed import resolve_device
 
 
 def load_checkpoint(path: str | Path, device: torch.device) -> dict:
+    numpy_safe_globals = [
+        np.core.multiarray.scalar,
+        np.dtype,
+        type(np.dtype(np.float64)),
+    ]
     try:
-        return torch.load(path, map_location=device, weights_only=True)
+        with torch.serialization.safe_globals(numpy_safe_globals):
+            return torch.load(path, map_location=device, weights_only=True)
     except TypeError:
         return torch.load(path, map_location=device)
 
