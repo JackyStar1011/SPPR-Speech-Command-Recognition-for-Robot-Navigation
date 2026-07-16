@@ -326,7 +326,7 @@ def main() -> None:
 
         map_png = st.session_state.get("dashboard_map_png")
         if map_png:
-            st.image(map_png, use_container_width=True)
+            st.image(map_png, use_column_width=True)
         else:
             st.info("Waiting for map data.")
 
