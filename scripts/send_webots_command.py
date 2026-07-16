@@ -1,18 +1,21 @@
 from __future__ import annotations
 
 import argparse
-import socket
+import sys
+from pathlib import Path
 
 
-UDP_HOST = "127.0.0.1"
-UDP_PORT = 5005
-VALID_COMMANDS = (
-    "MOVE_FORWARD",
-    "MOVE_BACKWARD",
-    "TURN_LEFT",
-    "TURN_RIGHT",
-    "STOP",
-)
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from src.robot.actions import VALID_WEBOTS_ACTIONS  # noqa: E402
+from src.robot.webots_udp import (
+    DEFAULT_WEBOTS_COMMAND_PORT,
+    DEFAULT_WEBOTS_HOST,
+    WebotsUDPClient,
+)  # noqa: E402
+
 
 
 def parse_args() -> argparse.Namespace:
@@ -22,20 +25,20 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "command",
         type=str.upper,
-        choices=VALID_COMMANDS,
+        choices=sorted(VALID_WEBOTS_ACTIONS),
         help="Movement command to send.",
     )
+    parser.add_argument("--host", default=DEFAULT_WEBOTS_HOST)
+    parser.add_argument("--port", type=int, default=DEFAULT_WEBOTS_COMMAND_PORT)
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
-    payload = args.command.encode("utf-8")
+    with WebotsUDPClient(host=args.host, port=args.port) as client:
+        client.send_action(args.command)
 
-    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as udp_socket:
-        udp_socket.sendto(payload, (UDP_HOST, UDP_PORT))
-
-    print(f"Sent UDP command to {UDP_HOST}:{UDP_PORT}: {args.command}")
+    print(f"Sent UDP command to {args.host}:{args.port}: {args.command}")
 
 
 if __name__ == "__main__":
