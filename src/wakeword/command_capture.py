@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 
 import torch
@@ -55,7 +55,12 @@ class WakeTriggeredCommandCapture:
         self.min_command_samples = int(sample_rate * min_command_seconds)
         self.max_command_samples = int(sample_rate * max_command_seconds)
 
-    def capture(self, frames: Iterable[torch.Tensor]) -> CommandCaptureResult:
+    def capture(
+        self,
+        frames: Iterable[torch.Tensor],
+        *,
+        stop_requested: Callable[[], bool] | None = None,
+    ) -> CommandCaptureResult:
         command_frames: list[torch.Tensor] = []
         waited_samples = 0
         captured_samples = 0
@@ -65,6 +70,9 @@ class WakeTriggeredCommandCapture:
         reason = "stream_ended"
 
         for frame in frames:
+            if stop_requested is not None and stop_requested():
+                reason = "stop_requested"
+                break
             normalized_frame = self._normalize_frame(frame)
             frame_samples = normalized_frame.size(-1)
             level = waveform_rms(normalized_frame)

@@ -207,6 +207,10 @@ def main() -> int:
                         ),
                         stop_requested=stop_event.is_set,
                     )
+                    if not stop_event.is_set():
+                        raise RuntimeError(
+                            "microphone stream ended unexpectedly; check the selected input device"
+                        )
                 except Exception as error:
                     pipeline.fail(error)
                     raise
@@ -215,4 +219,11 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except KeyboardInterrupt:
+        print("\n[SHUTDOWN] interrupted", file=sys.stderr)
+        raise SystemExit(130)
+    except Exception as error:
+        print(f"[FATAL] {type(error).__name__}: {error}", file=sys.stderr)
+        raise SystemExit(1)

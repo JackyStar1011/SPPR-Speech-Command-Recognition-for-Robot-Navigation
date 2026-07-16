@@ -92,12 +92,18 @@ class VoiceWebotsPipeline:
                 command_frames = chain([frame], iterator)
 
             self._transition(RuntimeState.LISTENING, "wake_word_detected")
-            capture = self.command_capture.capture(command_frames)
+            capture = self.command_capture.capture(
+                command_frames,
+                stop_requested=stop_requested,
+            )
             self._emit_capture(capture)
+
+            if self._should_stop(stop_requested):
+                break
 
             if capture.waveform is None:
                 self._transition(RuntimeState.COOLDOWN, "command_not_captured")
-                self._consume_cooldown(iterator)
+                self._consume_cooldown(iterator, stop_requested)
                 self._transition(RuntimeState.IDLE, "waiting_for_wake_word")
                 continue
 
@@ -130,7 +136,7 @@ class VoiceWebotsPipeline:
 
             commands_processed += 1
             self._transition(RuntimeState.COOLDOWN, "command_complete")
-            self._consume_cooldown(iterator)
+            self._consume_cooldown(iterator, stop_requested)
             self._transition(RuntimeState.IDLE, "waiting_for_wake_word")
 
         self._transition(RuntimeState.STOPPED, "runtime_stopped")
@@ -144,9 +150,15 @@ class VoiceWebotsPipeline:
             message=str(error),
         )
 
-    def _consume_cooldown(self, frames: Iterator[torch.Tensor]) -> None:
+    def _consume_cooldown(
+        self,
+        frames: Iterator[torch.Tensor],
+        stop_requested: StopPredicate | None,
+    ) -> None:
         remaining_samples = self.cooldown_samples
         while remaining_samples > 0:
+            if self._should_stop(stop_requested):
+                return
             try:
                 frame = next(frames)
             except StopIteration:
