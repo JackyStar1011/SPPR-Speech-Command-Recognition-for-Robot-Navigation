@@ -5,6 +5,7 @@ import math
 import sys
 from collections import deque
 from datetime import datetime, timezone
+from io import BytesIO
 from pathlib import Path
 from typing import Any
 
@@ -21,7 +22,17 @@ from src.robot.webots_udp import WebotsUDPClient  # noqa: E402
 from src.runtime import load_runtime_config  # noqa: E402
 
 
-def load_snapshot(path: Path) -> dict[str, Any] | None:
+def file_version(path: Path) -> int:
+    try:
+        return path.stat().st_mtime_ns
+    except OSError:
+        return 0
+
+
+@st.cache_data(ttl=1.0, show_spinner=False)
+def load_snapshot(path_value: str, version: int) -> dict[str, Any] | None:
+    del version
+    path = Path(path_value)
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (FileNotFoundError, json.JSONDecodeError, OSError):
@@ -29,7 +40,14 @@ def load_snapshot(path: Path) -> dict[str, Any] | None:
     return payload if isinstance(payload, dict) else None
 
 
-def load_recent_events(path: Path, limit: int = 20) -> list[dict[str, Any]]:
+@st.cache_data(ttl=5.0, show_spinner=False)
+def load_recent_events(
+    path_value: str,
+    version: int,
+    limit: int = 20,
+) -> list[dict[str, Any]]:
+    del version
+    path = Path(path_value)
     try:
         with path.open("r", encoding="utf-8") as file:
             lines = deque(file, maxlen=limit)
@@ -68,7 +86,7 @@ def build_webots_map(state: dict[str, Any], arena_size: float):
     axis.set_aspect("equal")
     axis.set_xlabel("Webots X (m)")
     axis.set_ylabel("Webots Y (m)")
-    axis.set_title(f"Wheelchair trajectory — {arena_size:.1f} m × {arena_size:.1f} m")
+    axis.set_title(f"Wheelchair trajectory - {arena_size:.1f} m x {arena_size:.1f} m")
     axis.grid(color="#cbd5e1", linewidth=0.8, alpha=0.8)
     axis.add_patch(
         patches.Rectangle(
@@ -122,13 +140,28 @@ def build_webots_map(state: dict[str, Any], arena_size: float):
     return figure
 
 
-def display_value(value: Any, fallback: str = "—") -> str:
+def render_map_png(state: dict[str, Any], arena_size: float) -> bytes:
+    figure = build_webots_map(state, arena_size)
+    buffer = BytesIO()
+    figure.savefig(buffer, format="png", dpi=120, bbox_inches="tight")
+    plt.close(figure)
+    return buffer.getvalue()
+
+
+def display_value(value: Any, fallback: str = "-") -> str:
     return fallback if value is None or value == "" else str(value)
+
+
+def rounded_number(value: Any, digits: int = 3) -> float | None:
+    try:
+        return round(float(value), digits)
+    except (TypeError, ValueError):
+        return None
 
 
 def main() -> None:
     st.set_page_config(page_title="Voice Wheelchair Dashboard", layout="wide")
-    st.title("Wake-word Voice Wheelchair — Webots Dashboard")
+    st.title("Wake-word Voice Wheelchair - Webots Dashboard")
     st.caption("Monitoring only: microphone and wake-word run in the standalone runtime process.")
 
     with st.sidebar:
@@ -144,6 +177,26 @@ def main() -> None:
             value=5.0,
             step=0.5,
         )
+        st.subheader("Refresh")
+        auto_refresh = st.checkbox("Auto refresh", value=True)
+        refresh_interval = st.slider(
+            "Status interval (seconds)",
+            min_value=0.5,
+            max_value=5.0,
+            value=1.0,
+            step=0.5,
+            disabled=not auto_refresh,
+        )
+        event_limit = st.number_input(
+            "Recent events",
+            min_value=5,
+            max_value=100,
+            value=20,
+            step=5,
+        )
+        if st.button("Refresh now", use_container_width=True):
+            st.cache_data.clear()
+            st.rerun()
 
     try:
         runtime_config = load_runtime_config(config_path)
@@ -166,9 +219,13 @@ def main() -> None:
         else:
             st.success("STOP sent to Webots.")
 
-    @st.fragment(run_every=0.5)
-    def render_live_dashboard() -> None:
-        state = load_snapshot(snapshot_path)
+    status_run_every = float(refresh_interval) if auto_refresh else None
+    map_run_every = max(2.0, float(refresh_interval) * 2.0) if auto_refresh else None
+    events_run_every = max(5.0, float(refresh_interval) * 5.0) if auto_refresh else None
+
+    @st.fragment(run_every=status_run_every)
+    def render_status() -> None:
+        state = load_snapshot(str(snapshot_path), file_version(snapshot_path))
         if state is None:
             st.warning(
                 f"Waiting for runtime state at `{snapshot_path}`. "
@@ -191,13 +248,8 @@ def main() -> None:
         status_columns[2].metric("Motion", display_value(webots.get("motion_state")))
         status_columns[3].metric("Last event", display_value(state.get("last_event")))
 
-        map_column, detail_column = st.columns([1.35, 1.0])
-        with map_column:
-            figure = build_webots_map(state, float(arena_size))
-            st.pyplot(figure, clear_figure=True)
-            plt.close(figure)
-
-        with detail_column:
+        voice_column, robot_column = st.columns(2)
+        with voice_column:
             st.subheader("Wake word")
             wake_columns = st.columns(3)
             wake_columns[0].metric("Model", display_value(wakeword.get("model_name")))
@@ -225,6 +277,7 @@ def main() -> None:
             if prediction.get("reason"):
                 st.caption(str(prediction["reason"]))
 
+        with robot_column:
             st.subheader("Audio capture")
             st.write(
                 {
@@ -247,8 +300,44 @@ def main() -> None:
                 }
             )
 
+    @st.fragment(run_every=map_run_every)
+    def render_map() -> None:
+        state = load_snapshot(str(snapshot_path), file_version(snapshot_path))
+        st.subheader("Webots map")
+        if state is None:
+            st.info("Map will appear after the runtime creates its first state snapshot.")
+            return
+
+        webots = state.get("webots", {})
+        trajectory = state.get("trajectory", [])
+        last_point = trajectory[-1] if trajectory else {}
+        signature = (
+            str(snapshot_path),
+            float(arena_size),
+            rounded_number(webots.get("x")),
+            rounded_number(webots.get("y")),
+            rounded_number(webots.get("yaw")),
+            len(trajectory),
+            last_point.get("timestamp") if isinstance(last_point, dict) else None,
+        )
+        if st.session_state.get("dashboard_map_signature") != signature:
+            st.session_state.dashboard_map_png = render_map_png(state, float(arena_size))
+            st.session_state.dashboard_map_signature = signature
+
+        map_png = st.session_state.get("dashboard_map_png")
+        if map_png:
+            st.image(map_png, use_container_width=True)
+        else:
+            st.info("Waiting for map data.")
+
+    @st.fragment(run_every=events_run_every)
+    def render_events() -> None:
         st.subheader("Recent events")
-        events = load_recent_events(event_log_path)
+        events = load_recent_events(
+            str(event_log_path),
+            file_version(event_log_path),
+            int(event_limit),
+        )
         if events:
             rows = [
                 {
@@ -263,7 +352,9 @@ def main() -> None:
         else:
             st.info("No runtime events yet.")
 
-    render_live_dashboard()
+    render_status()
+    render_map()
+    render_events()
 
 
 if __name__ == "__main__":
