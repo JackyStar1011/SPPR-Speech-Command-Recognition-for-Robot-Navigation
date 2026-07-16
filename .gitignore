@@ -231,6 +231,7 @@ outputs/figures/*
 !outputs/figures/report_data_preparation/**
 outputs/metrics/*
 !outputs/metrics/.gitkeep
+outputs/runtime/
 data/test_myVoice
 data/my_voice_test/**/*.wav
 

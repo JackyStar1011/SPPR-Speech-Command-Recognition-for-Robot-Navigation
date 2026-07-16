@@ -15,8 +15,16 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from src.inference.predictor import SpeechCommandPredictor  # noqa: E402
 from src.robot.safety import SafetyDecisionLayer  # noqa: E402
+from src.robot.webots_telemetry import WebotsTelemetryReceiver  # noqa: E402
 from src.robot.webots_udp import WebotsUDPClient  # noqa: E402
-from src.runtime import RuntimeEvent, VoiceWebotsPipeline, load_runtime_config  # noqa: E402
+from src.runtime import (  # noqa: E402
+    CompositeEventHandler,
+    RuntimeEvent,
+    RuntimeStateStore,
+    TelemetryMonitor,
+    VoiceWebotsPipeline,
+    load_runtime_config,
+)
 from src.utils.config import load_config  # noqa: E402
 from src.wakeword import OpenWakeWordDetector, WakeTriggeredCommandCapture  # noqa: E402
 from src.wakeword.audio_stream import MicrophoneFrameStream  # noqa: E402
@@ -155,6 +163,11 @@ def main() -> int:
     )
     microphone = MicrophoneFrameStream(sample_rate, runtime_config.wakeword.frame_ms)
     stop_event = Event()
+    state_store = RuntimeStateStore(
+        runtime_config.runtime.snapshot_path,
+        runtime_config.runtime.event_log_path,
+        trajectory_limit=runtime_config.runtime.trajectory_limit,
+    )
 
     def request_stop(signum, frame) -> None:
         print("\n[SHUTDOWN] stop requested", flush=True)
@@ -164,33 +177,39 @@ def main() -> int:
     if hasattr(signal, "SIGTERM"):
         signal.signal(signal.SIGTERM, request_stop)
 
-    with WebotsUDPClient(
-        host=runtime_config.webots.command_host,
-        port=runtime_config.webots.command_port,
-        stop_on_close=runtime_config.webots.stop_on_exit,
-    ) as webots_client:
-        pipeline = VoiceWebotsPipeline(
-            detector=detector,
-            predictor=predictor,
-            safety_layer=safety_layer,
-            command_capture=command_capture,
-            webots_client=webots_client,
-            sample_rate=sample_rate,
-            prediction_threshold=runtime_config.model.prediction_threshold,
-            cooldown_seconds=runtime_config.runtime.cooldown_seconds,
-            wakeword_enabled=runtime_config.wakeword.enabled,
-            event_handler=ConsoleEventPrinter(),
-        )
-        try:
-            pipeline.run_frames(
-                microphone.frames(
-                    timeout_seconds=runtime_config.runtime.frame_timeout_seconds
-                ),
-                stop_requested=stop_event.is_set,
-            )
-        except Exception as error:
-            pipeline.fail(error)
-            raise
+    event_handler = CompositeEventHandler(ConsoleEventPrinter(), state_store.handle_event)
+    with WebotsTelemetryReceiver(
+        host=runtime_config.webots.telemetry_host,
+        port=runtime_config.webots.telemetry_port,
+    ) as telemetry_receiver:
+        with TelemetryMonitor(telemetry_receiver, state_store):
+            with WebotsUDPClient(
+                host=runtime_config.webots.command_host,
+                port=runtime_config.webots.command_port,
+                stop_on_close=runtime_config.webots.stop_on_exit,
+            ) as webots_client:
+                pipeline = VoiceWebotsPipeline(
+                    detector=detector,
+                    predictor=predictor,
+                    safety_layer=safety_layer,
+                    command_capture=command_capture,
+                    webots_client=webots_client,
+                    sample_rate=sample_rate,
+                    prediction_threshold=runtime_config.model.prediction_threshold,
+                    cooldown_seconds=runtime_config.runtime.cooldown_seconds,
+                    wakeword_enabled=runtime_config.wakeword.enabled,
+                    event_handler=event_handler,
+                )
+                try:
+                    pipeline.run_frames(
+                        microphone.frames(
+                            timeout_seconds=runtime_config.runtime.frame_timeout_seconds
+                        ),
+                        stop_requested=stop_event.is_set,
+                    )
+                except Exception as error:
+                    pipeline.fail(error)
+                    raise
 
     return 0
 
