@@ -1,0 +1,34 @@
+model:
+  config_path: configs/models/cnn_gru.yaml
+  checkpoint_path: outputs/checkpoints/best_cnn_gru.pt
+  device: auto
+  prediction_threshold: 0.0
+
+wakeword:
+  enabled: true
+  model_name: hey_jarvis
+  model_path: null
+  threshold: 0.50
+  inference_framework: onnx
+  frame_ms: 80.0
+
+capture:
+  speech_rms_threshold: 0.010
+  speech_start_timeout_seconds: 3.0
+  silence_duration_seconds: 0.50
+  min_command_seconds: 0.25
+  max_command_seconds: 2.0
+
+webots:
+  command_host: 127.0.0.1
+  command_port: 5005
+  telemetry_host: 127.0.0.1
+  telemetry_port: 5006
+  stop_on_exit: true
+
+runtime:
+  frame_timeout_seconds: 2.0
+  cooldown_seconds: 0.50
+  snapshot_path: outputs/runtime/live_state.json
+  event_log_path: outputs/runtime/events.jsonl
+  trajectory_limit: 500
