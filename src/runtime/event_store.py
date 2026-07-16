@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import json
 import math
+import os
+import time
 from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
-from threading import Event, RLock, Thread
+from threading import Event, RLock, Thread, get_ident
 from typing import Any
 
 from src.robot.webots_telemetry import WebotsTelemetryReceiver
@@ -42,6 +44,7 @@ class RuntimeStateStore:
         self.event_log_path = Path(event_log_path)
         self.trajectory_limit = trajectory_limit
         self._lock = RLock()
+        self._persistence_error: str | None = None
         self._state: dict[str, Any] = {
             "updated_at": utc_now(),
             "runtime_state": RuntimeState.STOPPED.value,
@@ -125,17 +128,43 @@ class RuntimeStateStore:
             del trajectory[: len(trajectory) - self.trajectory_limit]
 
     def _write_snapshot(self) -> None:
-        temporary_path = self.snapshot_path.with_suffix(self.snapshot_path.suffix + ".tmp")
-        temporary_path.write_text(
-            json.dumps(self._state, ensure_ascii=False, indent=2),
-            encoding="utf-8",
+        temporary_path = self.snapshot_path.with_name(
+            f".{self.snapshot_path.name}.{os.getpid()}.{get_ident()}.tmp"
         )
-        temporary_path.replace(self.snapshot_path)
+        serialized_state = json.dumps(self._state, ensure_ascii=False, indent=2)
+        last_error: OSError | None = None
+
+        for attempt in range(5):
+            try:
+                temporary_path.write_text(serialized_state, encoding="utf-8")
+                os.replace(temporary_path, self.snapshot_path)
+            except OSError as error:
+                last_error = error
+                time.sleep(0.01 * (2**attempt))
+            else:
+                self._persistence_error = None
+                return
+
+        try:
+            temporary_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+        if last_error is not None:
+            self._report_persistence_error("snapshot", last_error)
 
     def _append_event(self, event: dict[str, Any]) -> None:
-        with self.event_log_path.open("a", encoding="utf-8") as file:
-            file.write(json.dumps(event, ensure_ascii=False, separators=(",", ":")))
-            file.write("\n")
+        try:
+            with self.event_log_path.open("a", encoding="utf-8") as file:
+                file.write(json.dumps(event, ensure_ascii=False, separators=(",", ":")))
+                file.write("\n")
+        except OSError as error:
+            self._report_persistence_error("event log", error)
+
+    def _report_persistence_error(self, target: str, error: OSError) -> None:
+        message = f"{target}: {type(error).__name__}: {error}"
+        if message != self._persistence_error:
+            print(f"Warning: runtime state persistence failed: {message}")
+            self._persistence_error = message
 
 
 class TelemetryMonitor:
