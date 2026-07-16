@@ -447,6 +447,9 @@ PROTO SimpleWheelchair [
       InertialUnit {
         name "inertial unit"
       }
+      GPS {
+        name "gps"
+      }
       # Left powered rear wheel
       HingeJoint {
         jointParameters HingeJointParameters {

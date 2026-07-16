@@ -1,3 +1,4 @@
+import json
 import math
 import socket
 
@@ -13,6 +14,9 @@ timestep = int(robot.getBasicTimeStep())
 
 UDP_HOST = "127.0.0.1"
 UDP_PORT = 5005
+TELEMETRY_HOST = "127.0.0.1"
+TELEMETRY_PORT = 5006
+TELEMETRY_INTERVAL_SECONDS = 0.1
 VALID_UDP_COMMANDS = {
     "MOVE_FORWARD",
     "MOVE_BACKWARD",
@@ -34,6 +38,10 @@ except OSError as error:
 udp_socket.setblocking(False)
 print(f"UDP receiver initialized on {UDP_HOST}:{UDP_PORT}")
 
+telemetry_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+telemetry_socket.setblocking(False)
+print(f"Telemetry sender initialized for {TELEMETRY_HOST}:{TELEMETRY_PORT}")
+
 
 # =========================================================
 # 2. Lấy thiết bị
@@ -42,6 +50,7 @@ print(f"UDP receiver initialized on {UDP_HOST}:{UDP_PORT}")
 left_motor = robot.getDevice("left wheel")
 right_motor = robot.getDevice("right wheel")
 inertial_unit = robot.getDevice("inertial unit")
+gps = robot.getDevice("gps")
 
 keyboard = robot.getKeyboard()
 keyboard.enable(timestep)
@@ -74,6 +83,10 @@ left_motor.setVelocity(0.0)
 right_motor.setVelocity(0.0)
 
 inertial_unit.enable(timestep)
+if gps is not None:
+    gps.enable(timestep)
+else:
+    print('Warning: GPS "gps" was not found; telemetry is disabled.')
 
 
 # =========================================================
@@ -108,6 +121,8 @@ current_left_speed = 0.0
 current_right_speed = 0.0
 target_left_speed = 0.0
 target_right_speed = 0.0
+last_telemetry_time = -TELEMETRY_INTERVAL_SECONDS
+telemetry_warning_printed = False
 
 
 # =========================================================
@@ -126,6 +141,41 @@ def get_current_yaw() -> float:
     Trả về yaw hiện tại của robot, đơn vị radian.
     """
     return inertial_unit.getRollPitchYaw()[2]
+
+
+def send_telemetry() -> None:
+    global last_telemetry_time, telemetry_warning_printed
+
+    if gps is None:
+        return
+
+    now = robot.getTime()
+    if now - last_telemetry_time < TELEMETRY_INTERVAL_SECONDS:
+        return
+
+    position = gps.getValues()
+    payload = {
+        "timestamp": now,
+        "x": position[0],
+        "y": position[1],
+        "z": position[2],
+        "yaw": get_current_yaw(),
+        "motion_state": current_state,
+        "left_velocity": current_left_speed,
+        "right_velocity": current_right_speed,
+    }
+    try:
+        telemetry_socket.sendto(
+            json.dumps(payload, separators=(",", ":")).encode("utf-8"),
+            (TELEMETRY_HOST, TELEMETRY_PORT),
+        )
+    except (BlockingIOError, OSError) as error:
+        if not telemetry_warning_printed:
+            print(f"Warning: failed to send telemetry: {error}")
+            telemetry_warning_printed = True
+    else:
+        last_telemetry_time = now
+        telemetry_warning_printed = False
 
 
 def set_motor_speeds(
@@ -417,10 +467,14 @@ try:
 
         update_turn()
         update_motor_speeds()
+        send_telemetry()
 finally:
     try:
         set_motor_speeds(0.0, 0.0, immediate=True)
     finally:
-        udp_socket.close()
+        try:
+            udp_socket.close()
+        finally:
+            telemetry_socket.close()
 
-    print("UDP receiver closed and robot stopped")
+    print("UDP sockets closed and robot stopped")
