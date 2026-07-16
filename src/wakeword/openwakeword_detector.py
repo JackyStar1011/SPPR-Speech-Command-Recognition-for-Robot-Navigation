@@ -36,6 +36,7 @@ class OpenWakeWordDetector:
         threshold: float = 0.5,
         inference_framework: str = "onnx",
         wakeword_models: list[str] | None = None,
+        auto_download: bool = True,
         model: Any | None = None,
     ) -> None:
         if not 0.0 <= threshold <= 1.0:
@@ -44,6 +45,7 @@ class OpenWakeWordDetector:
         self.prediction_key = model_name
         self.threshold = threshold
         self.inference_framework = inference_framework
+        self.auto_download = auto_download
         self._model = model or self._load_model(wakeword_models)
 
     @staticmethod
@@ -57,19 +59,36 @@ class OpenWakeWordDetector:
     def _resolve_model_path(self, openwakeword_module: Any) -> str:
         model_dir = Path(openwakeword_module.__file__).resolve().parent / "resources" / "models"
         extension = "onnx" if self.inference_framework == "onnx" else "tflite"
-        candidates = [
+        for candidate in self._model_candidates(model_dir, extension):
+            if candidate.exists():
+                self.prediction_key = candidate.stem
+                return str(candidate)
+
+        if self.auto_download:
+            try:
+                from openwakeword.utils import download_models
+
+                download_models([self.model_name])
+            except Exception as error:
+                raise RuntimeError(
+                    f"Failed to download openWakeWord model {self.model_name!r}: {error}"
+                ) from error
+            for candidate in self._model_candidates(model_dir, extension):
+                if candidate.exists():
+                    self.prediction_key = candidate.stem
+                    return str(candidate)
+
+        raise FileNotFoundError(
+            f"Could not find openWakeWord model '{self.model_name}' in {model_dir}. "
+            "Enable wakeword.auto_download, provide wakeword.model_path, or download the model."
+        )
+
+    def _model_candidates(self, model_dir: Path, extension: str) -> list[Path]:
+        return [
             model_dir / f"{self.model_name}.{extension}",
             model_dir / f"{self.model_name}_v0.1.{extension}",
             model_dir / f"{self.model_name}_v0.2.{extension}",
         ]
-        for candidate in candidates:
-            if candidate.exists():
-                self.prediction_key = candidate.stem
-                return str(candidate)
-        raise FileNotFoundError(
-            f"Could not find openWakeWord model '{self.model_name}' in {model_dir}. "
-            "Install/download the model file or choose an available model name."
-        )
 
     def _load_model(self, wakeword_models: list[str] | None) -> Any:
         try:

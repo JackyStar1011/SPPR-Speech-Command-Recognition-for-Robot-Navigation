@@ -141,6 +141,7 @@ def main() -> int:
             threshold=runtime_config.wakeword.threshold,
             inference_framework=runtime_config.wakeword.inference_framework,
             wakeword_models=wakeword_models,
+            auto_download=runtime_config.wakeword.auto_download,
         )
 
     predictor = SpeechCommandPredictor(

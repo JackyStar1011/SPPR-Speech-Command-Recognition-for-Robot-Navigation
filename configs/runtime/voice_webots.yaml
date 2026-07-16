@@ -11,6 +11,7 @@ wakeword:
   threshold: 0.50
   inference_framework: onnx
   frame_ms: 80.0
+  auto_download: true
 
 capture:
   speech_rms_threshold: 0.010

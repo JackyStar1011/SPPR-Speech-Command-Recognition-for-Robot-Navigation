@@ -76,7 +76,8 @@ streamlit run app/streamlit_dashboard.py
 Voice runtime sở hữu microphone, wake-word detector, command model, safety layer và UDP
 client. Dashboard chỉ đọc live state/telemetry nên việc reload Streamlit không làm gián đoạn
 wake-word. Model mặc định là `hey_jarvis`; đặt `wakeword.model_path` trong runtime config để
-dùng model custom như `Hey Wheelchair`.
+dùng model custom như `Hey Wheelchair`. Lần chạy đầu có thể cần Internet để openWakeWord tự
+tải model `hey_jarvis`; đặt `wakeword.auto_download: false` nếu chỉ dùng model local.
 
 ## Kiểm thử
 

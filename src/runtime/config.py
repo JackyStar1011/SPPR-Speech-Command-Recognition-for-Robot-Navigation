@@ -23,6 +23,7 @@ class WakeWordRuntimeConfig:
     threshold: float = 0.5
     inference_framework: str = "onnx"
     frame_ms: float = 80.0
+    auto_download: bool = True
 
 
 @dataclass(frozen=True)
@@ -97,6 +98,9 @@ def load_runtime_config(path: str | Path) -> VoiceWebotsRuntimeConfig:
                 wakeword.get("inference_framework", WakeWordRuntimeConfig.inference_framework)
             ),
             frame_ms=float(wakeword.get("frame_ms", WakeWordRuntimeConfig.frame_ms)),
+            auto_download=bool(
+                wakeword.get("auto_download", WakeWordRuntimeConfig.auto_download)
+            ),
         ),
         capture=CommandCaptureRuntimeConfig(
             speech_rms_threshold=float(
