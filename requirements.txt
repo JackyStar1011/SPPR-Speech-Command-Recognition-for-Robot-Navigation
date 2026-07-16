@@ -8,3 +8,4 @@ tqdm>=4.66
 streamlit>=1.32
 sounddevice>=0.4
 soundfile>=0.12
+openwakeword>=0.6

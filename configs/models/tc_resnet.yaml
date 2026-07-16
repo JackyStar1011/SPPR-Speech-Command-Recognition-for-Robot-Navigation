@@ -2,7 +2,7 @@ seed: 42
 device: auto
 
 data:
-  root: data/raw
+  root: data/bc_raw
   download: true
   commands:
     - forward
@@ -76,6 +76,15 @@ training:
 inference:
   threshold: 0.0
   align_speech: true
+
+wakeword:
+  enabled: true
+  backend: openwakeword
+  model_name: hey_jarvis
+  threshold: 0.50
+  session_seconds: 60.0
+  frame_ms: 320.0
+  speech_rms_threshold: 0.010
 
 safety:
   confidence_threshold: 0.70

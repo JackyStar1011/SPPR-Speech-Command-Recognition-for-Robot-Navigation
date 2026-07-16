@@ -54,11 +54,30 @@ python -m src.training.tune_threshold `
 python -m src.inference.infer_wav --file path\to\audio.wav
 python -m src.inference.infer_mic --seconds 1.0
 python -m src.inference.infer_wav_mfcc --file path\to\audio.wav
-streamlit run app/streamlit_app.py
 ```
 
-Ứng dụng Streamlit hiển thị waveform, Log-Mel spectrogram, kết quả dự đoán và mô phỏng
-chuyển động robot. Trước khi thực thi, lệnh đi qua lớp kiểm tra an toàn trong `src/robot`.
+`app/streamlit_app.py` là prototype simulator 2D cũ và không nằm trong luồng chạy Webots.
+
+## Chạy full voice-to-Webots system
+
+1. Mở world `simulation/webots/sppr_wheelchair/worlds/sppr_wheelchair.wbt` và chạy Webots.
+2. Chạy always-on voice runtime:
+
+```powershell
+python scripts/run_voice_webots.py --config configs/runtime/voice_webots.yaml
+```
+
+3. Mở dashboard giám sát trong terminal khác nếu cần:
+
+```powershell
+streamlit run app/streamlit_dashboard.py
+```
+
+Voice runtime sở hữu microphone, wake-word detector, command model, safety layer và UDP
+client. Dashboard chỉ đọc live state/telemetry nên việc reload Streamlit không làm gián đoạn
+wake-word. Model mặc định là `hey_jarvis`; đặt `wakeword.model_path` trong runtime config để
+dùng model custom như `Hey Wheelchair`. Lần chạy đầu có thể cần Internet để openWakeWord tự
+tải model `hey_jarvis`; đặt `wakeword.auto_download: false` nếu chỉ dùng model local.
 
 ## Kiểm thử
 
